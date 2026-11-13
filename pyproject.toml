@@ -10,5 +10,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "tests/setup"]
-markers = ["slow: creates real virtualenvs"]
+pythonpath = ["src", "tests/setup", "tests/runtime"]
+markers = ["slow: creates real virtualenvs", "integration: real ollama binary and a real model"]
