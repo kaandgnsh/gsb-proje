@@ -175,3 +175,54 @@ docs/milestones/M01.md
 
 - [ ] Test: `shellcheck *.sh` temiz; `./install.sh --dry-run --offline <tmp> --lai-home <tmp>` çıkış 0; Türkçe/boşluklu `--lai-home` (Review Focus 1); `.ps1` dosyaları `lai_setup` alt komutlarına aynı argümanları geçiriyor (metin kontrolü; pwsh yok — bilinen sınırlama).
 - [ ] Tüm testleri çalıştır: `.venv/bin/pytest -q` → hepsi PASS; çıktıyı `docs/milestones/M01.md`'ye yaz. Commit.
+
+---
+
+## M2 — Yerel AI çalışma ortamı (izole Ollama + Qwen)
+
+Kullanıcının kesinleştirdiği ek kurallar (2026-11-13): uygulamanın Ollama'sı uygulama tarafından başlatılan **alt süreçtir**; uygulama kapanınca yalnız kendi başlattığını kapatır. Başlatma anında port yeniden kontrol edilir; çakışmada mevcut servise dokunulmaz. Model indirme yalnız açık izinle; çevrimdışı içe aktarma korunur. CPU yedeği zorunlu. Windows ve Linux süreç yönetimi ayrı. `OLLAMA_NO_CLOUD=1` tek başına ağ yalıtımı kanıtı sayılmaz — dış bağlantılar ayrıca doğrulanır.
+
+**Mimari kararı:** Yeni, yalnız stdlib kullanan `lai_runtime` paketi (süreç yöneticisi, istemci, içe aktarma, ağ denetimi). Hem `lai_setup` hem ileride `lai` bunu kullanır; böylece çalışma ortamı uygulamadan bağımsız güncellenir. Tasarımdaki systemd kullanıcı servisi yerine uygulamaya ait alt süreç (kural 9).
+
+### Dosyalar
+
+```
+src/lai_runtime/__init__.py
+src/lai_runtime/config.py      # RuntimeConfig, load_runtime_config(paths)
+src/lai_runtime/ports.py       # port_in_use(host, port), PortConflictError
+src/lai_runtime/env.py         # build_env(cfg, paths, base_env, platform)
+src/lai_runtime/process.py     # RuntimeManager: start/stop/restart/status, sahiplik kaydı
+src/lai_runtime/_posix.py      # PDEATHSIG, /proc başlangıç zamanı, sinyaller
+src/lai_runtime/_windows.py    # Job Object (KILL_ON_JOB_CLOSE), GetProcessTimes
+src/lai_runtime/client.py      # OllamaClient (yalnız loopback, proxy yok)
+src/lai_runtime/jsonschema_lite.py
+src/lai_runtime/chunking.py
+src/lai_runtime/models.py      # kaynak model okuma (manifests / manifests-v2 / .gguf), API ile içe aktarma
+src/lai_runtime/netaudit.py    # süreç ağacı soketleri, ihlal tespiti, NetworkMonitor
+src/lai_setup/m2_steps.py      # RuntimeBinary, ModelAvailable, RuntimeVerify
+src/lai_setup/cli.py           # + runtime start|stop|status, model pull|import|verify|list
+tests/runtime/fake_ollama.py   # sahte sunucu (OLLAMA_HOST, OLLAMA_NO_CLOUD zorunlu)
+tests/runtime/test_*.py        # birim
+tests/integration/test_real_runtime.py   # gerçek ollama ikilisi + gerçek model
+docs/milestones/M02.md
+```
+
+### Arayüzler
+
+- `RuntimeConfig(host="127.0.0.1", port=11435, model="qwen3.5:4b", accel: "auto"|"cpu"="auto", keep_alive="5m", binary: str|None=None)`; `load_runtime_config(paths) -> RuntimeConfig` (config.toml `[ollama]`; host loopback değilse ValueError).
+- `build_env(cfg, paths, base_env, platform) -> dict` — **temiz** ortam: yalnız `PATH`, `HOME`/`USERPROFILE`=`runtime/home`, `LANG`, `OLLAMA_HOST=127.0.0.1:<port>`, `OLLAMA_MODELS=<paths.models>`, `OLLAMA_NO_CLOUD=1`, `OLLAMA_ORIGINS=` , `OLLAMA_KEEP_ALIVE`, `LAI_RUNTIME_OWNER=<instance id>`; GPU sürücü yolları (`LD_LIBRARY_PATH`, `CUDA_VISIBLE_DEVICES` varsa) geçirilir; proxy değişkenleri ve üst ortamdaki `OLLAMA_*` asla geçmez. `accel="cpu"` → `CUDA_VISIBLE_DEVICES=""`, `HIP_VISIBLE_DEVICES=""`, `ROCR_VISIBLE_DEVICES=""`, `GGML_VK_VISIBLE_DEVICES=""` ve istemci isteklerinde `num_gpu=0`.
+- `RuntimeManager(cfg, paths, platform=None, binary=None)`: `start(timeout=60) -> RuntimeStatus` (port doluysa ve sahibi biz değilsek `PortConflictError`; biz isek yeniden kullanır), `stop(timeout=15) -> bool` (yalnız kayıtlı ve kimliği doğrulanan süreci kapatır), `restart()`, `status() -> RuntimeStatus(running, pid, port, owned, version)`, `base_url`. Sahiplik kaydı `runtime/ollama-process.json` = `{pid, start_id, port, owner}`; kimlik = pid + başlangıç zamanı + ortamdaki `LAI_RUNTIME_OWNER` (Linux `/proc/<pid>/environ`).
+- `OllamaClient(base_url, timeout=600)`: loopback dışı → ValueError. `version()`, `list_models()`, `show(model)`, `ps()`, `generate(model, prompt, *, system=None, schema=None, options=None, think=False) -> GenerateResult(text, data, eval_count, total_duration_ns)` (`schema` verilirse `format=schema` ve çıktı `jsonschema_lite.validate` ile denetlenir; geçersizse `StructuredOutputError`), `pull(model, on_progress)`, `upload_blob(path, digest)`, `create(model, files, template=None, system=None, parameters=None)`. Hatalar: `RuntimeUnavailableError`, `ModelNotFoundError`, `OllamaError`.
+- `chunk_text(text, max_chars=4000, overlap=200) -> list[Chunk(index, start, end, text)]` — paragraf, sonra cümle sınırında böler; hiçbir karakter kaybolmaz.
+- `find_source_model(models_dir, name) -> SourceModel(name, gguf: Path, gguf_digest, template, system, parameters: dict)`; `source_from_gguf(path, name)`; `import_model(client, source, target_name, on_progress=None) -> str (digest)`. Kaynağa asla yazılmaz.
+- `process_tree(pid) -> list[int]`, `sockets_of(pids) -> list[Conn(proto, local, remote, state, pid)]`, `violations(conns) -> list[str]` (loopback dışı uzak adres; loopback dışı dinleme; UDP 53), `NetworkMonitor(pid, interval=0.05)` bağlam yöneticisi.
+
+### Görevler (her biri TDD; birim testleri sahte sunucu ile)
+
+1. **config + ports + env** — test: temiz ortam (üst `OLLAMA_HOST=0.0.0.0`, `HTTPS_PROXY` geçmez), cpu modu değişkenleri, loopback olmayan host reddi, gerçek soketle dolu port tespiti.
+2. **client + jsonschema_lite + chunking** — test: 0.0.0.0/192.168.x/`example.com` reddedilir; sahte sunucuda 404 → `ModelNotFoundError`; şemaya uymayan JSON → `StructuredOutputError`; chunk birleşimi = orijinal metin, sınırlar cümle sonunda.
+3. **process (Linux + Windows ayrı)** — test (sahte sunucu): başlat/durdur/yeniden başlat; port çakışması (başka süreç dinlerken) → `PortConflictError` ve o süreç hâlâ yanıt veriyor; sahiplik kaydı yabancı süreci gösteriyorsa `stop()` onu öldürmez; ebeveyn SIGKILL alınca çocuk ölür (PDEATHSIG); başlangıçta çöken ikili → anlaşılır hata ve kayıt temizlenir. Windows: `_windows` seçimi ve Job Object çağrı sırası sahte ctypes ile.
+4. **models** — test: `manifests/` ve `manifests-v2/` (sembolik bağ) düzenleri; salt okunur kaynak ağacı içe aktarma sonrası birebir aynı; bozuk blob (digest uyuşmazlığı) → hata, hedefte model yok.
+5. **netaudit** — test: sabit `/proc` örnekleriyle ihlal tespiti; gerçek süreçte yalnız loopback bağlantısı → ihlal yok.
+6. **kurulum adımları + CLI** — test: `model pull` `--online`/onay olmadan → çıkış 2, sahte sunucuya `/api/pull` gitmez; `--offline` içe aktarma; `doctor` süreç başlatmaz; sürüm ve model digest'i durum dosyasına sabitlenir; `runtime stop` sistem servisine dokunmaz.
+7. **Gerçek entegrasyon** (`tests/integration`, gerçek `/usr/bin/ollama`, geçici `LAI_HOME`, rastgele boş port, sistemdeki modelin **salt okunur** kopyalanarak içe aktarılması): yanıt üretimi; Türkçe talimat; JSON şema çıktısı; uzun metin parçalı analiz; olmayan model; port çakışması; sistem servisi (PID, `/api/tags`, model dizini) değişmedi; `unshare -rn` ile ağsız ad alanında çıkarım; çıkarım sırasında süreç ağacının soketlerinde loopback dışı bağlantı yok; başlat/durdur/yeniden başlat; `accel=cpu` → `size_vram == 0`.
