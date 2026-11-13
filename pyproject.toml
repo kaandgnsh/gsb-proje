@@ -1,0 +1,14 @@
+[project]
+name = "local-assessment-ai"
+version = "0.1.0"
+description = "Yerel, çevrimdışı kişilik envanteri değerlendirme platformu"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests/setup"]
+markers = ["slow: creates real virtualenvs"]
