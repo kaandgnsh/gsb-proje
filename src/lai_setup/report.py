@@ -59,9 +59,9 @@ class Report:
             f"  Sistem modelleri: {', '.join(o.models_11434) or '-'}",
             f"  Uygulama portu  : 11435 {'DOLU' if o.listening_11435 else 'boş'}"
             f"{' — UYARI: 0.0.0.0 üzerinde dinleniyor' if o.wildcard_11435 else ''}",
-            "",
-            "Adımlar",
         ]
+        if self.results:
+            lines += ["", "Adımlar"]
         for r in self.results:
             lines.append(f"  [{STATUS_TR[r.status]:<9}] {r.title}: {r.message}")
         if self.pins:

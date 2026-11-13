@@ -32,6 +32,7 @@ def test_directories_created_private(tmp_path):
         assert d.is_dir()
     for d in ctx.paths.user_data_dirs():
         assert oct(d.stat().st_mode & 0o777) == "0o700"
+    assert (ctx.paths.root / ".lai-root").is_file()
 
 
 def test_default_config_contents(tmp_path):

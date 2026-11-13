@@ -112,3 +112,8 @@ def test_report_written_utf8(tmp_path):
     assert data["pins"]["model"] == "qwen3.5:4b"
     txt = t.read_text(encoding="utf-8")
     assert "ş adımı" in txt and "UYGULANDI" in txt
+
+
+def test_report_without_steps_has_no_empty_section(tmp_path):
+    rep = Report(action="detect", info=_ctx(tmp_path).info, results=[])
+    assert "Adımlar" not in rep.to_text()

@@ -9,6 +9,8 @@ from pathlib import Path
 
 from .steps import Context, Step
 
+MARKER = ".lai-root"  # kaldırma yalnız bu işaretin olduğu kökte çalışır
+
 DEFAULT_CONFIG = """\
 # Local Assessment AI ayarları. Bu dosya kurulum tarafından bir kez yazılır;
 # sonraki kurulumlar sizin değişikliklerinizi korur.
@@ -47,9 +49,14 @@ class EnsureDirectories(Step):
             d.mkdir(parents=True, exist_ok=True)
         for d in ctx.paths.user_data_dirs():
             os.chmod(d, 0o700)
+        marker = ctx.paths.root / MARKER
+        if not marker.exists():
+            marker.write_text("Bu dizin Local Assessment AI tarafından yönetilir.\n", encoding="utf-8")
 
     def verify(self, ctx: Context) -> tuple[bool, str]:
         missing = [str(d) for d in ctx.paths.all_dirs() if not d.is_dir()]
+        if not (ctx.paths.root / MARKER).is_file():
+            missing.append(str(ctx.paths.root / MARKER))
         if missing:
             return False, "eksik dizin: " + ", ".join(missing)
         if ctx.info.os != "windows":
@@ -114,6 +121,7 @@ class CreateVenv(Step):
 class InstallPythonDeps(Step):
     id = "pydeps"
     title = "Python bağımlılıkları"
+    needs_source = True
 
     def _req(self, ctx: Context) -> Path:
         if ctx.requirements_file is None:
