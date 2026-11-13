@@ -153,3 +153,15 @@ def test_detect_json(env, capsys):
     data = json.loads(capsys.readouterr().out)
     assert data["distro_id"] == "cachyos"
     assert data["ollama"]["listening_11434"] is True
+
+
+def test_windows_platform_dry_run(tmp_path, capsys):
+    r = FakeRunner({("powershell",): (0, "Intel(R) Arc(TM) Graphics\nNVIDIA GeForce RTX 5060\n")})
+    env = {"LOCALAPPDATA": str(tmp_path / "Local"), "APPDATA": str(tmp_path / "Roaming"),
+           "USERPROFILE": str(tmp_path)}
+    rc = main(["install", "--dry-run"], env=env, runner=r, isatty=False, platform="windows",
+              http_get=_no_http)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "windows" in out and "intel, nvidia" in out and "PLANLANDI" in out
+    assert not (tmp_path / "Local").exists()
