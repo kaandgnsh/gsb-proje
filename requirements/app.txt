@@ -1,0 +1,7 @@
+# Local Assessment AI uygulama bağımlılıkları — sürümler sabittir.
+# Değiştirildiğinde kurulum motoru (sha256 farkı) bağımlılıkları yeniden kurar.
+PySide6==6.12.0
+PyMuPDF==2.1
+python-docx==1.2.0
+openpyxl==3.1.5
+reportlab==5.1.0
