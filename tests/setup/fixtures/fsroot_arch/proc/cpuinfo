@@ -1,0 +1,7 @@
+processor	: 0
+model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+flags		: fpu sse4_2 avx avx2 fma f16c avx512f popcnt
+
+processor	: 1
+model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+flags		: fpu sse4_2 avx avx2 fma f16c avx512f popcnt
