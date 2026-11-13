@@ -50,6 +50,14 @@ def main():
     def save(reg):
         reg_file.write_text(json.dumps(reg))
 
+    def write_manifest(name, model_digest):
+        """Gerçek Ollama gibi manifests/ altına manifest yaz (kurulum denetimi bunu okur)."""
+        repo, _, tag = name.partition(":")
+        p = store / "manifests/registry.ollama.ai/library" / repo / (tag or "latest")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"schemaVersion": 2, "layers": [
+            {"mediaType": "application/vnd.ollama.image.model", "digest": model_digest}]}))
+
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
@@ -128,8 +136,12 @@ def main():
                 return self._send(200, {"response": text, "done": True, "eval_count": 3,
                                         "total_duration": 1000})
             if self.path == "/api/pull":
-                reg[name] = {"digest": "sha256:" + hashlib.sha256(name.encode()).hexdigest()}
+                data = b"GGUF" + name.encode()
+                d = "sha256:" + hashlib.sha256(data).hexdigest()
+                (store / "blobs" / d.replace(":", "-")).write_bytes(data)
+                reg[name] = {"digest": d}
                 save(reg)
+                write_manifest(name, d)
                 return self._send(200, lines=[
                     {"status": "pulling manifest"},
                     {"status": "downloading", "total": 100, "completed": 50},
@@ -144,6 +156,7 @@ def main():
                                                                   .encode()).hexdigest(),
                              "request": req}
                 save(reg)
+                write_manifest(name, files.get("model.gguf", ""))
                 return self._send(200, {"status": "success"})
             self._send(404, {"error": "not found"})
 

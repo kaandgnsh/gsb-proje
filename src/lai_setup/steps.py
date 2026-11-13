@@ -77,6 +77,10 @@ class Step(ABC):
     def details(self, ctx: Context) -> dict:
         return {}
 
+    def record_pins(self, ctx: Context) -> None:
+        """Adım başarılıysa (uygulanmış ya da zaten tamam) sürüm sabitlerini yazar."""
+        return None  # isteğe bağlı kanca
+
 
 def _record(ctx: Context, res: StepResult) -> None:
     if ctx.dry_run or res.status in (StepStatus.PLANNED,):
@@ -102,6 +106,9 @@ def run_steps(steps: list[Step], ctx: Context, action: Action) -> list[StepResul
                              f"{type(exc).__name__}: {exc}")
         if action != "doctor":
             _record(ctx, res)
+            if not ctx.dry_run and res.status in (StepStatus.OK, StepStatus.SKIPPED,
+                                                  StepStatus.APPLIED):
+                step.record_pins(ctx)
         results.append(res)
         failed = res.status == StepStatus.FAILED
     return results

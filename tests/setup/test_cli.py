@@ -63,7 +63,7 @@ def test_interactive_cancel_exits_3(env):
 @pytest.mark.slow
 def test_install_twice_is_idempotent(env, offline):
     d, req = offline
-    args = ["install", "--offline", str(d), "--requirements", str(req)]
+    args = ["install", "--skip-ai", "--offline", str(d), "--requirements", str(req)]
     assert run(args, env) == 0
     home = Path(env["LAI_HOME"])
     cfg = home / "config" / "config.toml"
@@ -83,7 +83,7 @@ def test_install_twice_is_idempotent(env, offline):
 @pytest.mark.slow
 def test_doctor_is_read_only_and_reports(env, offline, capsys):
     d, req = offline
-    run(["install", "--offline", str(d), "--requirements", str(req)], env)
+    run(["install", "--skip-ai", "--offline", str(d), "--requirements", str(req)], env)
     home = Path(env["LAI_HOME"])
     before = _tree(home)
     capsys.readouterr()

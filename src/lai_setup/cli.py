@@ -12,6 +12,7 @@ from . import __version__
 from .detect import detect_system
 from .distro import missing_prereqs, strategy_for, suggest_command
 from .m1_steps import m1_steps
+from .m2_steps import m2_steps
 from .paths import resolve_paths
 from .report import Report
 from .runner import CommandRunner, SystemRunner
@@ -24,9 +25,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REQUIREMENTS = REPO_ROOT / "requirements" / "app.txt"
 
 
-def all_steps():
+def all_steps(skip_ai: bool = False):
     """Kurulum adımlarının tamamı. Sonraki kilometre taşları buraya ekler."""
-    return m1_steps()
+    return m1_steps() + ([] if skip_ai else m2_steps())
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -48,10 +49,32 @@ def _parser() -> argparse.ArgumentParser:
         src.add_argument("--offline", metavar="DİZİN", help="çevrimdışı paket dizininden kur")
         s.add_argument("--dry-run", action="store_true", help="hiçbir şey yazmadan planı göster")
         s.add_argument("--yes", action="store_true", help="onay sorularını evet kabul et")
+        s.add_argument("--skip-ai", action="store_true",
+                       help="yalnız uygulamayı kur; Ollama ve modeli sonra kur")
 
     doc = sub.add_parser("doctor", parents=[common], help="salt okunur sağlık denetimi")
     doc.add_argument("--json", action="store_true")
     doc.add_argument("--save-report", action="store_true", help="raporu logs/ altına da yaz")
+
+    m = sub.add_parser("model", parents=[common], help="yapay zekâ modeli işlemleri")
+    msub = m.add_subparsers(dest="model_cmd", required=True)
+    mp = msub.add_parser("pull", parents=[common], help="modeli internetten indir (açık izin)")
+    mp.add_argument("--online", action="store_true", help="indirmeye izin ver")
+    mp.add_argument("--model", help="varsayılan: config.toml içindeki model")
+    mi = msub.add_parser("import", parents=[common], help="modeli yerel dosyadan içe aktar")
+    mi.add_argument("--from", dest="source", required=True,
+                    help="başka bir Ollama model dizini ya da .gguf dosyası (yalnız okunur)")
+    mi.add_argument("--name", help="kaynak dizindeki model adı (dizin için zorunlu)")
+    mi.add_argument("--as", dest="target", help="uygulamadaki adı (varsayılan: config modeli)")
+    mv = msub.add_parser("verify", parents=[common], help="modeli çalıştırarak doğrula")
+    mv.add_argument("--model")
+    msub.add_parser("list", parents=[common], help="uygulamanın modellerini listele")
+
+    rt = sub.add_parser("runtime", parents=[common], help="uygulamanın Ollama süreci")
+    rsub = rt.add_subparsers(dest="runtime_cmd", required=True)
+    rsub.add_parser("status", parents=[common])
+    rsub.add_parser("stop", parents=[common], help="yalnız uygulamanın kendi sürecini durdurur")
+    rsub.add_parser("run", parents=[common], help="ön planda çalıştır (Ctrl+C ile durur)")
 
     u = sub.add_parser("uninstall", parents=[common], help="kaldır (veriler korunur)")
     u.add_argument("--purge-data", action="store_true",
@@ -104,6 +127,11 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
             "Güvenlik için bu dizine kurulmaz; boş ya da yeni bir dizin seçin (--lai-home).")
         return EXIT_USAGE
 
+    if args.cmd in ("model", "runtime"):
+        from .ai_cli import model_command, runtime_command
+        fn = model_command if args.cmd == "model" else runtime_command
+        return fn(args, paths, platform, interactive, ask, out, err)
+
     if args.cmd == "uninstall":
         return _uninstall(args, paths, env, interactive, ask, out, err)
 
@@ -113,7 +141,7 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
                   interactive=interactive)
 
     if args.cmd == "doctor":
-        results = run_steps(all_steps(), ctx, "doctor")
+        results = run_steps(all_steps(skip_ai=_ai_skipped(state)), ctx, "doctor")
         if state.corrupt:
             results.insert(0, StepResult("state", "Kurulum durum dosyası", StepStatus.FAILED,
                                          "bozuk; 'repair' ile yeniden oluşturulur"))
@@ -126,6 +154,7 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
 
     # install / repair
     ctx.dry_run, ctx.assume_yes = args.dry_run, args.yes
+    steps = all_steps(skip_ai=args.skip_ai)
     if args.online:
         ctx.mode = "online"
     elif args.offline:
@@ -133,13 +162,14 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
         if not ctx.offline_dir.is_dir():
             err(f"Çevrimdışı paket dizini bulunamadı: {ctx.offline_dir}")
             return EXIT_USAGE
-    elif not args.dry_run and _needs_source(all_steps(), ctx, args.cmd):
+    elif not args.dry_run and _needs_source(steps, ctx, args.cmd):
         if not interactive:
             err("Kaynak seçilmedi. İnternetten indirmeye izin vermek için --online, "
                 "yerel paket için --offline <dizin> kullanın. Hiçbir şey indirilmedi.")
             return EXIT_USAGE
         out("Kurulum için eksik dosyalar var. Nereden alınsın?\n"
-            "  [1] Çevrimiçi (Python paketleri indirilir, yaklaşık 250 MB)\n"
+            "  [1] Çevrimiçi (Python paketleri ~250 MB; model gerekiyorsa o da indirilir,\n"
+            "      boyutu indirme başında gösterilir)\n"
             "  [2] Çevrimdışı paket dizini\n  [3] İptal")
         choice = ask("Seçiminiz [1/2/3]: ")
         if choice == "1":
@@ -159,7 +189,11 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
         if rc != EXIT_OK:
             return rc
 
-    results = run_steps(all_steps(), ctx, args.cmd)
+    results = run_steps(steps, ctx, args.cmd)
+    if args.skip_ai:
+        state.pins["ai_skipped"] = "1"
+    else:
+        state.pins.pop("ai_skipped", None)
     rep = Report(action=args.cmd, info=info, results=results, pins=dict(state.pins))
     if args.dry_run:
         rep.notes.append("Deneme modu: hiçbir dosya yazılmadı.")
@@ -172,6 +206,10 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
     if t:
         out(f"Rapor: {t}")
     return EXIT_OK if rep.ok else EXIT_FAIL
+
+
+def _ai_skipped(state: InstallState) -> bool:
+    return state.pins.get("ai_skipped") == "1"
 
 
 def _foreign_root(paths) -> bool:

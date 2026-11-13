@@ -36,7 +36,7 @@ def test_chunks_cover_text_exactly():
     chunks = chunk_text(text, max_chars=1500, overlap=150)
     assert len(chunks) > 5
     assert chunks[0].start == 0 and chunks[-1].end == len(text)
-    for prev, cur in zip(chunks, chunks[1:]):
+    for prev, cur in zip(chunks, chunks[1:], strict=False):
         assert cur.start <= prev.end  # boşluk yok
         assert cur.start >= prev.start
     for c in chunks:
