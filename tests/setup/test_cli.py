@@ -165,3 +165,46 @@ def test_windows_platform_dry_run(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "windows" in out and "intel, nvidia" in out and "PLANLANDI" in out
     assert not (tmp_path / "Local").exists()
+
+
+def test_missing_requirements_file_is_usage_error(env, capsys):
+    assert run(["install", "--online", "--requirements", "/yok/req.txt"], env) == 2
+    assert "bulunamadı" in capsys.readouterr().err
+
+
+def test_install_refuses_to_adopt_foreign_non_empty_dir(tmp_path):
+    victim = tmp_path / "baska"
+    (victim / "config").mkdir(parents=True)
+    (victim / "config" / "kisisel.txt").write_text("dokunma")
+    req = tmp_path / "r.txt"
+    req.write_text("")
+    import sys
+    rc = run(["install", "--online", "--requirements", str(req)],
+             {"LAI_HOME": str(victim)}, runner=FakeRunner({(sys.executable, "-c"): (0, "")}))
+    assert rc == 2
+    assert sorted(p.name for p in victim.iterdir()) == ["config"]
+    assert not (victim / ".lai-root").exists()
+    assert (victim / "config" / "kisisel.txt").read_text() == "dokunma"
+
+
+def test_yes_answers_prereq_prompt(env, monkeypatch):
+    calls = []
+    r = FakeRunner({("pkexec", "pacman"): (0, "")}, which={"pkexec": "/usr/bin/pkexec"})
+    orig = r.run
+
+    def run_(argv, timeout=10, env=None, cwd=None):
+        calls.append(argv)
+        if argv[1:3] == ["-c", "import venv, ensurepip"]:
+            done = any(c[0] == "pkexec" for c in calls)
+            return orig(["ok"] if done else ["bad"], timeout)
+        return orig(argv, timeout, env, cwd)
+
+    r.responses[("ok",)] = (0, "")
+    r.responses[("bad",)] = (1, "")
+    r.run = run_
+    from lai_setup import cli
+    rc = cli.main(["install", "--online", "--yes"], env=env, runner=r, isatty=True,
+                  input_fn=lambda p="": (_ for _ in ()).throw(AssertionError("sorulmamalı")),
+                  fs_root=FIX, http_get=_no_http)
+    assert ["pkexec", "pacman", "-S", "--needed", "python"] in calls
+    assert rc in (0, 1)

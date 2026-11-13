@@ -96,6 +96,14 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
 
     requirements = Path(args.requirements) if args.requirements else DEFAULT_REQUIREMENTS
 
+    if args.cmd in ("install", "repair") and not requirements.is_file():
+        err(f"Bağımlılık listesi bulunamadı: {requirements}")
+        return EXIT_USAGE
+    if args.cmd in ("install", "repair") and _foreign_root(paths):
+        err(f"{paths.root} boş değil ve bir Local Assessment AI kurulumu değil. "
+            "Güvenlik için bu dizine kurulmaz; boş ya da yeni bir dizin seçin (--lai-home).")
+        return EXIT_USAGE
+
     if args.cmd == "uninstall":
         return _uninstall(args, paths, env, interactive, ask, out, err)
 
@@ -166,6 +174,13 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
     return EXIT_OK if rep.ok else EXIT_FAIL
 
 
+def _foreign_root(paths) -> bool:
+    root = paths.root
+    if not root.is_dir() or is_managed_root(paths) or paths.state_file.exists():
+        return False
+    return any(root.iterdir())
+
+
 def _needs_source(steps, ctx: Context, action: str) -> bool:
     """Herhangi bir adım indirme/paket gerektiriyor ve henüz tamam değil mi?"""
     for s in steps:
@@ -190,7 +205,8 @@ def _ensure_prereqs(ctx: Context, ask, out, err) -> int:
     if not ctx.interactive:
         err("Etkileşimsiz modda sistem paketi kurulmaz. Komutu kendiniz çalıştırın.")
         return EXIT_FAIL
-    if ask("Bu komut şimdi çalıştırılsın mı? [e/H]: ").lower() not in ("e", "evet", "y", "yes"):
+    if not ctx.assume_yes and ask("Bu komut şimdi çalıştırılsın mı? [e/H]: ").lower() not in (
+            "e", "evet", "y", "yes"):
         return EXIT_CANCEL
     r = ctx.runner.run(cmd, timeout=1800)
     if r.returncode != 0 or missing_prereqs(ctx.python, ctx.runner):
@@ -239,7 +255,7 @@ def _uninstall(args, paths, env, interactive, ask, out, err) -> int:
             return EXIT_CANCEL
     if args.purge_data:
         if interactive:
-            out(f"UYARI: değerlendirme verileri ve raporlar kalıcı olarak silinecek.")
+            out("UYARI: değerlendirme verileri ve raporlar kalıcı olarak silinecek.")
             if ask(f"Onaylamak için '{PURGE_WORD}' yazın: ") != PURGE_WORD:
                 out("Onay verilmedi; hiçbir şey silinmedi.")
                 return EXIT_CANCEL

@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from fakes import FakeRunner
 from lai_setup.detect import SystemInfo
