@@ -9,6 +9,7 @@ from .model import IngestError
 
 SUPPORTED = ("pdf", "docx", "xlsx", "csv", "json")
 MAX_BYTES = 200 * 1024 * 1024
+ZIP_EXPANSION = 2  # açılmış arşiv en çok MAX_BYTES × 2
 _LEGACY = {".doc": "Word 97-2003 (.doc)", ".xls": "Excel 97-2003 (.xls)"}
 _NAMES = {"pdf": "PDF", "docx": "Word (DOCX)", "xlsx": "Excel (XLSX)", "csv": "CSV", "json": "JSON"}
 
@@ -73,6 +74,15 @@ def detect_kind(path: Path, *, declared: str | None = None, max_bytes: int = MAX
     with open(path, "rb") as f:
         head = f.read(4096)
     sniffed = _sniff(path, head)
+    if sniffed in ("docx", "xlsx"):
+        # Sıkıştırılmış arşiv açıldığında belleği tüketmesin (zip bombası)
+        with zipfile.ZipFile(path) as z:
+            unpacked = sum(i.file_size for i in z.infolist())
+        if unpacked > max_bytes * ZIP_EXPANSION:
+            raise IngestError("archive_too_large",
+                              f"{name}: arşiv açıldığında {unpacked / 1048576:.0f} MB olur; sınır "
+                              f"{max_bytes * ZIP_EXPANSION / 1048576:.0f} MB. Dosya bozuk ya da "
+                              f"kötü amaçlı olabilir.")
     ok = (sniffed == kind or (kind == "csv" and sniffed in ("text", "json"))
           or (kind == "json" and sniffed == "json"))
     if not ok:

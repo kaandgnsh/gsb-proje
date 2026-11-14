@@ -139,3 +139,15 @@ def test_locator_description_is_turkish():
     d = Locator(page=1, char_start=0, char_end=5).to_dict()
     assert d == {"page": 1, "char_start": 0, "char_end": 5}
     assert Locator.from_dict(d) == Locator(page=1, char_start=0, char_end=5)
+
+
+def test_zip_bomb_is_rejected_by_uncompressed_size(tmp_path):
+    p = tmp_path / "bomba.xlsx"
+    with zipfile.ZipFile(p, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("xl/workbook.xml", "<x/>")
+        z.writestr("xl/worksheets/sheet1.xml", b"\0" * 5_000_000)
+    assert p.stat().st_size < 100_000
+    with pytest.raises(IngestError) as e:
+        detect_kind(p, max_bytes=1_000_000)
+    assert e.value.code == "archive_too_large" and "bomba.xlsx" in e.value.message
