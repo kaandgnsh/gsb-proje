@@ -61,6 +61,8 @@ class Locator:
             parts.append(f"paragraf {self.paragraph}")
         if self.line is not None or (self.row is not None and not parts):
             parts.append(f"satır {self.line if self.line is not None else self.row}")
+            if self.line is None and self.column:
+                parts.append(f"sütun {self.column}")
         return ", ".join(parts) or "konum bilinmiyor"
 
     def span_to(self, other: Locator) -> Locator:
