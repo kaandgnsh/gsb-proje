@@ -66,6 +66,10 @@ def test_run_creation_is_audited(store, inventory_id):
 
 # ------------------------------------------------------------------ katalog
 VALID = {
+    "aggregation": {"dimension":"E-I","method":"sum"},
+    "dimension_weight": {"dimension":"E-I","value":2},
+    "zero_score": {"dimension":"E-I","policy":"select_pole","pole":"I"},
+    "precision": {"dimension":"E-I","places":2,"rounding":"half_even"},
     "dimension_def": {"dimension": "E-I", "poles": ["E", "I"]},
     "dimension_items": {"dimension": "E-I", "items": [1, 5, 9]},
     "default_option_map": {"dimension": "E-I", "options": {"A": "E", "B": "I"}},

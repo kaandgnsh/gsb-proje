@@ -1,4 +1,4 @@
-"""Puanlama kuralı kataloğu (v1): sabit tür kümesi, her tür için katı gövde şeması.
+"""Puanlama kuralı kataloğu (v2): sabit tür kümesi, her tür için katı gövde şeması.
 
 Kurallar veri olarak saklanır ve yalnız bu katalogdaki türler için yazılmış Python kodu
 tarafından yorumlanır (DSL ya da kod çalıştırma yok). Katalog dışı tür reddedilir.
@@ -9,7 +9,7 @@ import json
 
 from lai_runtime.jsonschema_lite import validate
 
-CATALOG_VERSION = 1
+CATALOG_VERSION = 2
 
 _DIM = {"type": "string", "minLength": 1, "maxLength": 20}
 _POLE = {"type": "string", "minLength": 1, "maxLength": 10}
@@ -23,6 +23,16 @@ def _obj(required, **props):
 
 
 SCHEMAS: dict[str, dict] = {
+    "aggregation": _obj(("dimension", "method"), dimension=_DIM,
+                        method={"type":"string", "enum":["sum","mean"]}),
+    "dimension_weight": _obj(("dimension", "value"), dimension=_DIM,
+                             value={"type":"number", "minimum":0, "maximum":1000}),
+    "zero_score": _obj(("dimension", "policy"), dimension=_DIM,
+                       policy={"type":"string", "enum":["select_pole","invalidate","use_threshold"]},
+                       pole=_POLE),
+    "precision": _obj(("dimension", "places", "rounding"), dimension=_DIM,
+                      places={"type":"integer", "minimum":0,"maximum":12},
+                      rounding={"type":"string","enum":["half_even","half_up"]}),
     "dimension_def": _obj(("dimension", "poles"), dimension=_DIM,
                           poles={"type": "array", "items": _POLE, "minItems": 2, "maxItems": 2}),
     "dimension_items": _obj(("dimension", "items"), dimension=_DIM,
@@ -43,7 +53,7 @@ SCHEMAS: dict[str, dict] = {
                                           "enum": ["skip", "count_as_pole", "invalidate"]},
                                   pole=_POLE),
     "normalization": _obj(("dimension", "method", "parameters"), dimension=_DIM,
-                          method={"type": "string", "enum": ["percentage", "scaled", "other"]},
+                          method={"type": "string", "enum": ["none", "percentage", "scaled", "other"]},
                           parameters={"type": "object"}),
 }
 RULE_TYPES = tuple(SCHEMAS)
@@ -58,6 +68,11 @@ def _code_ok(code: str) -> bool:
 
 def _extra(rule_type: str, body: dict) -> list[str]:
     errs: list[str] = []
+    if rule_type == "zero_score":
+        if body["policy"] == "select_pole" and "pole" not in body:
+            errs.append("$.pole: 'select_pole' için zorunlu")
+        if body["policy"] != "select_pole" and "pole" in body:
+            errs.append("$.pole: yalnız 'select_pole' için kullanılır")
     if rule_type == "dimension_def" and len(set(body["poles"])) != 2:
         errs.append("$.poles: iki kutup birbirinden farklı olmalı")
     if rule_type == "dimension_items" and len(set(body["items"])) != len(body["items"]):
@@ -138,6 +153,8 @@ _POLICY_TR = {"skip": "hesaba katılmaz", "count_as_pole": "kutba sayılır", "i
 def describe_rule(rule_type: str, body: dict) -> str:
     """Kullanıcıya gösterilecek kısa Türkçe özet."""
     d = body.get("dimension")
+    if rule_type in ("aggregation", "dimension_weight", "zero_score", "precision"):
+        return f"{d}: {rule_type} {canonical(rule_type, body)}"
     if rule_type == "dimension_def":
         return f"{d} boyutunun kutupları: {', '.join(body['poles'])}"
     if rule_type == "dimension_items":
