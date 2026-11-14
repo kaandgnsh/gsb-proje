@@ -564,3 +564,19 @@ M11 Linux kanıtı Windows kanıtı değildir. M12 onayı sonrası:
   verisi ve mevcut sistem servislerinin korunması doğrulanacak.
 - Windows gerçek ağ ve GUI testleri geçmeden platform kapısı kaldırılmayacak.
   Hedef model edinimi/kalite değerlendirmesi ayrıca izin ve ayrı sonuç gerektirir.
+
+## M12 — Yerel Linux paket adayı ve çevrimdışı yaşam döngüsü
+
+Referans: 747 teknik test. AppDir içinde yerel Python/bağımlılık snapshot'ı,
+SHA256 manifesti, ayrı runtime/model bileşenleri; AppImage yalnız doğrulanan yerel
+appimagetool/runtime girdilerinden. AppRun, kurulu komut ve desktop aynı zorunlu
+yalıtımlı girişi kullanır. Bakım yolu değerlendirme/runtime başlatamaz.
+
+Doğrulama: geçici HOME/kurulum kökü ve ağ ad alanı; ilk/ikinci kurulum, bozuk
+sürüm onarımı, hash/sürüm güncellemesi, SQLite/profil/rapor koruması, kaldırma.
+4/12/28 soruluk sentetik envanterler; soru sayısı sürümden alınır. 400 yalnız eski
+ölçek testidir. Paket girişinde pozitif kontrollü M11 ağı, normal AppImage GUI
+başlangıcı; kaynak teknik takım. Temiz VM/donanım doğrulaması ayrı ve bekleyebilir.
+Windows: mevcut PowerShell motoru + PyInstaller/Inno girdileri; gerçek Windows
+olmadan GUI/ağ/installer geçişi iddia edilmez, M11 platform engeli korunur.
+Paketler yerelde teslim edilir; kurulum, model indirme, push ve yayın yok.
