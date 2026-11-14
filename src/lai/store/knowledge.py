@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 
 from .enums import TRUSTED_SOURCES, Confidence, Source, Validation
 
+KEEP = object()  # "önceki sürümdeki değeri koru" (None ise alan boşaltılır)
+
 
 @dataclass
 class Entry:
@@ -47,6 +49,7 @@ class Correction:
     created_at: str
 
 
+_CLEARABLE = ("confirmation_ref", "rule_type", "item_number", "dimension_code")
 _COLS = ("inventory_id, entry_key, version, supersedes_id, kind, rule_type, content, summary, "
          "item_number, dimension_code, confidence, source, validation, confirmation_ref, reason, "
          "created_by")
@@ -163,7 +166,8 @@ class KnowledgeRepo:
             "inventory_id", "entry_key", "kind", "rule_type", "content", "summary", "item_number",
             "dimension_code", "confidence", "source", "validation", "confirmation_ref",
             "created_by")}
-        row.update({k: v for k, v in changes.items() if v is not None or k == "confirmation_ref"})
+        row.update({k: v for k, v in changes.items()
+                    if v is not KEEP and (v is not None or k in _CLEARABLE)})
         row.update(version=prev.version + 1, supersedes_id=prev.id)
         with self.s.transaction() as c:
             eid = self._insert(c, **row)
@@ -199,11 +203,14 @@ class KnowledgeRepo:
 
     def apply_user_correction(self, inventory_id: int, *, entry_key: str, content: dict,
                               summary: str, explanation: str, user_text: str | None,
-                              kind: str = "rule", rule_type: str | None = None,
-                              item_number: int | None = None, dimension_code: str | None = None,
+                              kind: str = "rule", rule_type=KEEP, item_number=KEEP,
+                              dimension_code=KEEP,
                               target_entry_id: int | None = None) -> tuple[Correction, Entry]:
         """Kullanıcının verdiği bilgiyi açık bir düzeltme kaydı olarak saklar ve CONFIRMED
-        yeni sürüm üretir. Önceki sürümler değişmeden kalır."""
+        yeni sürüm üretir. Önceki sürümler değişmeden kalır.
+
+        `rule_type`, `item_number`, `dimension_code` verilmezse önceki sürümün değeri korunur;
+        açıkça `None` verilirse alan boşaltılır (ör. kural maddeden boyuta taşındığında)."""
         with self.s.transaction() as c:
             ev = self.s.inventory.add_evidence(kind="user_statement", note=user_text or explanation)
             prev = self.get(target_entry_id) if target_entry_id else self.latest(inventory_id, entry_key)
@@ -211,8 +218,10 @@ class KnowledgeRepo:
             if prev is None:
                 entry = self.record(inventory_id, entry_key=entry_key, kind=kind, content=content,
                                     summary=summary, confidence=Confidence.CONFIRMED,
-                                    source=Source.USER, rule_type=rule_type,
-                                    item_number=item_number, dimension_code=dimension_code,
+                                    source=Source.USER,
+                                    rule_type=None if rule_type is KEEP else rule_type,
+                                    item_number=None if item_number is KEEP else item_number,
+                                    dimension_code=None if dimension_code is KEEP else dimension_code,
                                     evidence_ids=[ev], confirmation_ref=ref, reason=explanation,
                                     created_by="kullanıcı")
             else:
