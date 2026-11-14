@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1 ve M2 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1, M2 ve M3 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -46,3 +46,13 @@ python -m lai_setup runtime status                       # uygulamanın Ollama s
 (Komutlar depo kökünde `PYTHONPATH=src` ile çalıştırılır.)
 
 Gerçek entegrasyon testleri: `.venv/bin/pytest -m integration tests/integration -v -s`
+
+## Veritabanı
+
+```bash
+python -m lai_setup db status                 # şema sürümü, bütünlük, kayıt sayıları
+python -m lai_setup db backup                 # data/backups altına doğrulanmış yedek
+python -m lai_setup db verify <yedek.db>      # yedeği denetle
+python -m lai_setup db restore <yedek.db>     # geri yükle (önce mevcut DB yedeklenir)
+```
+Veritabanı `~/.local/share/local-assessment-ai/data/lai.db`; kaldırmada korunur.
