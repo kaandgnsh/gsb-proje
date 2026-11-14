@@ -198,7 +198,8 @@ def read_docx(path: Path) -> ReadOutput:
             text = p.text
             if not text.strip():
                 continue
-            label = numbering.label(child, p.style.style_id if p.style is not None else None)
+            ps = child.find(f"{_W}pPr/{_W}pStyle")  # stil nesnesini çözmek paragraf başına yavaş
+            label = numbering.label(child, ps.get(f"{_W}val") if ps is not None else None)
             if label:
                 auto += 1
                 text = f"{label} {text}"
