@@ -71,6 +71,35 @@ def _import_cmd(a) -> int:
         store.close()
 
 
+def _key_cmd(a):
+    from lai.store.store import Store
+
+    from .answer_key import import_answer_key
+
+    db = Path(a.db)
+    store = Store.open(db, backup_dir=db.parent / "backups")
+    try:
+        row = store.conn.execute(
+            "SELECT id FROM inventories WHERE name=?", (a.inventory,)
+        ).fetchone()
+        if row is None:
+            raise IngestError("no_inventory", "Önce envanteri içe aktarın.")
+        r = import_answer_key(
+            store, row[0], Path(a.file), documents_dir=db.parent / "documents"
+        )
+        print(
+            json.dumps(r, ensure_ascii=False)
+            if a.json
+            else f"{r['answer_key_count']} anahtar kaydedildi; puanlama kuralı üretilmedi."
+        )
+        return 0
+    except IngestError as e:
+        print(f"HATA: {e.message}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m lai.ingest",
                                 description="Envanter belgelerini içe aktarır (PDF/DOCX/XLSX/CSV/JSON).")
@@ -86,7 +115,11 @@ def main(argv=None) -> int:
         sp.add_argument("--kind", choices=["pdf", "docx", "xlsx", "csv", "json"])
         sp.add_argument("--encoding", help="CSV kodlaması (ör. cp1254); varsayılan UTF-8")
         sp.add_argument("--json", action="store_true")
+    kp=sub.add_parser("key",help="ayrı cevap anahtarını ham değer olarak kaydet")
+    kp.add_argument("--db",required=True);kp.add_argument("--inventory",required=True)
+    kp.add_argument("--json",action="store_true");kp.add_argument("file")
     a = p.parse_args(argv)
+    if a.cmd=="key":return _key_cmd(a)
     return _parse_cmd(a) if a.cmd == "parse" else _import_cmd(a)
 
 
