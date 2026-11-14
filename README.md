@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1–M6 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1–M7 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -120,3 +120,41 @@ Bu komut model indirmez veya servis başlatmaz; mevcut uygulama modeline bağlan
 Onay veya düzeltmeden sonra ilgili kurallar yeniden sınanır, sorular güncellenir ve değişiklik
 varsa yeni profil sürümü oluşur. Eski değerlendirmeler ve profil sürümleri değişmez.
 Ayrıntılar ve test sınırları: [M6 raporu](docs/milestones/M06.md).
+
+
+## Deterministik puanlama (M7)
+
+`lai.core.scoring.score_assessment(exam, profile, responses)` saf Python girişidir;
+Ollama, Qt, ağ veya veritabanı gerektirmez. Depodaki belirli sürümlerle çalışmak için:
+
+```python
+from lai.scoring import evaluate
+
+result = evaluate(
+    store,
+    inventory_version_id=sinav_surumu,
+    profile_version_id=puanlama_profili_surumu,
+    responses=[(1, "A"), (2, "B")],  # yalnız sentetik örnek; yinelenenler doğrulanır
+)
+json_safe = result.to_dict()  # ondalık puanlar kayıpsız metindir
+```
+
+Bağdaştırıcı salt okunurdur; değerlendirme kaydı ve toplu iş oluşturmaz. Cevap listesi
+veya tamsayı madde numaralı sözlük kabul edilir. Hatalı seçenek, yinelenen cevap ve
+sürüm uyuşmazlığı Türkçe `ScoringInputError` üretir. Kritik eksiklik/çelişki boyut
+sonucunda `NOT_EVALUABLE` olarak açıklanır; diğer boyutların hesapları korunur.
+Dört boyutun tamamı hesaplanmadan dört harfli profil üretilmez.
+
+Motor 50 basamaklı yerel `Decimal` bağlamını kullanır. Sıra: seçenek katkısı →
+toplam/ortalama → boyut ağırlığı → normalizasyon → sıfır/eşik/eşitlik kararı →
+yalnız gösterim için yuvarlama. Her madde, dönüşüm, kaynak kural ve profil sürümü
+hesap dökümüne girer. `VERIFIED` doğrulanmış profil kurallarını, `PROVISIONAL`
+ise doğrulanmamış/eksik bilgilerin bulunduğunu belirtir; gerçek envanter formülü
+bu projede henüz bilinmemektedir.
+
+Katalog v2, mevcut türlere `aggregation`, `dimension_weight`, `zero_score`, `precision`
+ekler. Normalizasyon yalnız açık `none`, `percentage` (pozitif payda) veya `scaled`
+(çarpan ve sabit) parametreleriyle yürütülür. `other` veya serbest metin formülleri
+çalıştırılmaz. M6 açıklamalarından sayısal kural tahmin edilmez.
+
+Ayrıntılı semantik, kabul testleri ve ölçüm: [M7 raporu](docs/milestones/M07.md).
