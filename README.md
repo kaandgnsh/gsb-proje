@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1–M8 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1–M9 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -234,3 +234,61 @@ ve iş duraklatılır.
 2 girdi/kullanım hatası, 130 kesinti. Toplu işin satır özeti sonuç kimliği, profil,
 güven durumu ve sınırlamaları gösterir; tam döküm `result` komutuyla okunur.
 Uçtan uca süre ölçümleri ve testler: [M8 raporu](docs/milestones/M08.md).
+
+
+## Türkçe masaüstü (M9)
+
+PySide6 ve mevcut proje bağımlılıkları hazır olan ortamda, depo kökünden:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m lai.ui
+PYTHONPATH=src .venv/bin/python -m lai.ui --db /veri/lai.db
+```
+
+Kurulu pakette `python -m lai.ui` yeterlidir. `--db` verilmezse mevcut platform
+uygulama dizinindeki veritabanı kullanılır; `LAI_HOME` desteklenir. Windows kaynak
+çalıştırmada `PYTHONPATH=src` ayarlayıp `.venv\Scripts\python.exe -m lai.ui` kullanın.
+Windows masaüstü oturumu bu teslimatta doğrulanmadı.
+
+Ekranlar: **Belgeler, Öğrenme Merkezi, Tekil Değerlendirme, Toplu İşler, Geçmiş,
+Katılımcılar, Ayarlar**. Belge kaydından önce soru/anahtar sayıları ve konumlu hatalar
+gösterilir. Öğrenme soruları, ertelenen/bilinmeyen cevaplar ve kural kaynakları kalıcıdır.
+Açık kural formu model gerektirmez; model yorumu ayrı onay ister. Sonuç ve geçmişte
+boyut puanları, hesaplanamama nedenleri ve açılabilir hesap dökümü bulunur.
+
+Toplu işte önce dosya/sütun önizlemesi, sonra **İşi kaydet**, ardından **Başlat / devam et**
+kullanılır. Sütunlar ve satır hataları incelenebilir. İşin sabit sürümleri ve dört
+ilerleme sayacı görünür. **Duraklat / iptal** güvenli katılımcı sınırında uygulanır.
+Pencere kapanırken çalışan iş duraklatılır; yeniden açıp aynı işi seçerek devam edilir.
+Kaynak dosya sonradan silinse de işin saklanan cevapları kullanılır.
+
+Uzun işlemler arka plandadır. Kapanış zorla işçi öldürmez; geçerli işlem sınırını
+bekler. Model isteğinde iptal, mevcut isteğin dönüşü/zaman aşımında uygulanabilir.
+Ayarlar yalnız uygulamanın loopback portunu kontrol eder; **11434 reddedilir**.
+Servis başlatılmaz/model indirilmez. Model yokken belge ve hazır profille puanlama çalışır.
+Yerel görünüm tercihleri seçilen veritabanının yanındaki `.ui.json` dosyasındadır;
+Ollama/OpenCode ayarları değiştirilmez.
+
+Klavye: `Ctrl+1…7` ekranlar, `Ctrl+R` yenile, `Esc` aktif işlem için iptal/duraklatma
+isteği, `Tab` alanlar arasında gezinme, hesap ağacında sağ/sol ok aç/kapat.
+
+Ayrı cevap anahtarı JSON biçimi (CSV/XLSX/PDF/DOCX de desteklenir):
+
+```json
+{"format":"lai-answer-key","version":1,"answer_key":[{"item":1,"value":"A"}]}
+```
+
+Tabloda `Soru No` ve `Cevap Anahtarı` başlıkları, PDF/DOCX'te `Cevap Anahtarı` bölümü
+kullanılır. Değerlerin anlamı tahmin edilmez. Aynı servis CLI'da da kullanılabilir:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m lai.ingest key --db /veri/lai.db --inventory "Sentetik Envanter" anahtar.csv
+PYTHONPATH=src .venv/bin/python -m lai.ui.launcher --output /veri/kisayollar --db /veri/lai.db
+```
+
+Kısayol üreteci yalnız belirtilen dizine Linux `.desktop` veya Windows `.cmd` ve
+başlatıcı dosyası yazar; sistem/masaüstüne kendiliğinden kurulum yapmaz.
+
+Doğrulanan ortam: Linux x86_64, Qt **offscreen** testleri ve gerçek **Wayland** oturumu.
+Ölçüm, testler, ekran görüntüleri ve sınırlamalar: [M9 raporu](docs/milestones/M09.md).
+PDF ve biçimlendirilmiş rapor dışa aktarmaları M10 kapsamındadır.

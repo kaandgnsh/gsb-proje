@@ -1,0 +1,22 @@
+{
+  "platform": "Linux-7.3.3-1-cachyos-x86_64-with-glibc2.44",
+  "python": "3.14.7",
+  "pyside6": "6.12.0",
+  "qt_platform": "wayland",
+  "synthetic_only": true,
+  "model_used": false,
+  "close_and_pause": true,
+  "import_preview": true,
+  "learning_answer": true,
+  "single_result": true,
+  "batch_resume": true,
+  "duplicate_results": false,
+  "heartbeat_ticks": 20,
+  "job_counts": {
+    "succeeded": 0,
+    "partial": 20,
+    "failed": 0,
+    "pending": 0
+  },
+  "passed": true
+}
