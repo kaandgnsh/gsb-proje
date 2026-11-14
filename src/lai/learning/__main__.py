@@ -186,9 +186,14 @@ def main(argv=None) -> int:
     sp["answer"].add_argument("--interpret-with-model", action="store_true", help="Serbest metni yerel model ile doğrulanmamış öneriye dönüştür")
     sp["answer"].add_argument("--port", type=int, default=11435)
     sp["answer"].add_argument("--model", default="qwen3.5:4b")
+    from lai.assessment.cli import add_commands
+    add_commands(sub)
     a = p.parse_args(argv)
     store = _store(a)
     try:
+        from lai.assessment.cli import COMMANDS, run
+        if a.cmd in COMMANDS:
+            return run(a,store)
         inv = _inventory(store, a.inventory, create=a.cmd in ("reference", "examples"))
         if inv is None:
             print(f"HATA: '{a.inventory}' adlı envanter yok; önce belgeleri içe aktarın "
