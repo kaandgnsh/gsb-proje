@@ -113,6 +113,46 @@ def _rules(a, store, inv) -> int:
     return 0
 
 
+def _missing(a, store, inv):
+    from dataclasses import asdict
+
+    from lai.learning.interactive import analyze, gaps
+    analyze(store, inv)
+    rows = gaps(store, inv, include_closed=a.all)
+    _out(a, [asdict(g) for g in rows], "\n\n".join(
+        f"#{g.id} [{g.severity}] [{g.state}] {g.payload['question']}\n"
+        f"Neden: {g.payload['why']}\nEtkilenen: {g.payload['dimensions']}, "
+        f"{len(g.payload['items'])} madde\nKanıt: {g.payload['evidence']}\n"
+        f"Seçenekler: {', '.join(g.payload['choices'])}; serbest metin kabul edilir."
+        for g in rows) or 'Açık soru yok.')
+    return 0
+
+
+def _answer(a, store, inv):
+    from lai.ai.llm import LLMError, LLMUnavailable
+    from lai.learning.interactive import answer, interpret_answer
+    row = store.conn.execute('SELECT inventory_id FROM learning_gaps WHERE id=?',(a.question,)).fetchone()
+    if row is None or row[0] != inv:
+        print('HATA: soru bu envantere ait değil', file=sys.stderr)
+        return 2
+    try:
+        structured = json.loads(a.structured) if a.structured else None
+        if a.interpret_with_model:
+            if a.action != 'text' or structured is not None:
+                raise ValueError('Model yorumu --action text ile kullanılır')
+            from lai.ai.llm import OllamaLLM
+            from lai_runtime.config import RuntimeConfig
+            cfg = RuntimeConfig(port=a.port,model=a.model)
+            result = interpret_answer(store,a.question,a.text,OllamaLLM(cfg.base_url,cfg.model))
+        else:
+            result = answer(store,a.question,a.action,a.text,structured=structured)
+    except (ValueError, KeyError, LLMError, LLMUnavailable) as e:
+        print(f'HATA: {e}',file=sys.stderr)
+        return 2
+    _out(a,result,f"Yanıt kaydedildi: {result['state']}; profil #{result['profile_version_id']}")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m lai.learning",
                                 description="Puanlama kuralı keşfi (yerel AI önerir, kod doğrular).")
@@ -122,7 +162,9 @@ def main(argv=None) -> int:
         ("examples", "örnek sonuç dosyası (lai-examples JSON) içe aktar"),
         ("discover", "yerel AI ile kural adaylarını çıkar ve doğrula"),
         ("fit", "kuralları örnek sonuçlarla yeniden sına"),
-        ("rules", "güncel kuralları ve durumlarını listele"))}
+        ("rules", "güncel kuralları ve durumlarını listele"),
+        ("missing", "eksik bilgileri analiz et ve Türkçe soruları listele"),
+        ("answer", "bir eksik bilgi sorusunu yanıtla"))}
     for s in sp.values():
         s.add_argument("--db", required=True)
         s.add_argument("--inventory", required=True, help="envanter adı")
@@ -136,6 +178,14 @@ def main(argv=None) -> int:
     d.add_argument("--no-think", action="store_true", help="düşünme modunu kapat")
     d.add_argument("--document", type=int, action="append", help="yalnız bu belge(ler)")
     d.add_argument("--max-chars", type=int, default=6000)
+    sp["missing"].add_argument("--all", action="store_true", help="ertelenmiş/kapalı sorular dahil")
+    sp["answer"].add_argument("--question", type=int, required=True)
+    sp["answer"].add_argument("--action", required=True, choices=["yes","no","text","unknown","later","reject","correct","teach","interpret","resume"])
+    sp["answer"].add_argument("--text", default="")
+    sp["answer"].add_argument("--structured", help="Açık kullanıcı kuralı: rule_type ve body JSON")
+    sp["answer"].add_argument("--interpret-with-model", action="store_true", help="Serbest metni yerel model ile doğrulanmamış öneriye dönüştür")
+    sp["answer"].add_argument("--port", type=int, default=11435)
+    sp["answer"].add_argument("--model", default="qwen3.5:4b")
     a = p.parse_args(argv)
     store = _store(a)
     try:
@@ -145,7 +195,7 @@ def main(argv=None) -> int:
                   f"(python -m lai.ingest import).", file=sys.stderr)
             return 2
         return {"reference": _reference, "examples": _examples, "discover": _discover,
-                "fit": _fit, "rules": _rules}[a.cmd](a, store, inv)
+                "fit": _fit, "rules": _rules, "missing": _missing, "answer": _answer}[a.cmd](a, store, inv)
     finally:
         store.close()
 
