@@ -20,7 +20,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .detect import MAX_BYTES, sha256_file
+from .detect import MAX_BYTES, detect_kind, sha256_file
 from .model import ERROR, INFO, PARSER_VERSION, WARNING, IngestError, Issue, ParseResult
 from .parse import parse_file
 
@@ -131,14 +131,14 @@ def _publish_items(c, version_id: int, document_id: int, res: ParseResult) -> No
                       "VALUES (?,?,?,?,?)", (iid, o.code, o.text, pos, oev))
 
 
-def _raw_units(c, document_id: int, res: ParseResult) -> None:
+def _raw_units(c, document_id: int, units) -> None:
     if c.execute("SELECT 1 FROM document_raw_units WHERE document_id=? LIMIT 1",
                  (document_id,)).fetchone():
         return  # aynı belgenin ham içeriği zaten saklı (ör. önceki başarısız denemeden)
     c.executemany("INSERT INTO document_raw_units(document_id, idx, page, text, locator) "
                   "VALUES (?,?,?,?,?)",
                   [(document_id, u.index, u.locator.page, u.text, _loc(u.locator))
-                   for u in res.raw_units])
+                   for u in units])
 
 
 def import_document(store, inventory_id: int, path: Path, *, documents_dir: Path,
@@ -197,7 +197,7 @@ def import_document(store, inventory_id: int, path: Path, *, documents_dir: Path
             return ImportReport("failed", rid, path.name, sha, real_kind, document_id=doc_id,
                                 message=failure.message, issues=[issue])
 
-        _raw_units(c, doc_id, res)
+        _raw_units(c, doc_id, res.raw_units)
         n_opts = sum(len(it.options) for it in res.items)
         chash = content_hash(res)
         version_id = version_no = None
@@ -239,3 +239,51 @@ def import_document(store, inventory_id: int, path: Path, *, documents_dir: Path
                         same_content=same, item_count=len(res.items), option_count=n_opts,
                         answer_key_count=len(res.answer_keys), message=message,
                         issues=list(res.issues), meta=res.meta)
+
+
+@dataclass
+class ReferenceImport:
+    document_id: int
+    file_name: str
+    sha256: str
+    kind: str
+    unit_count: int
+    duplicate: bool
+    issues: list[Issue] = field(default_factory=list)
+
+
+def import_reference_document(store, inventory_id: int, path: Path, *, documents_dir: Path,
+                              kind: str | None = None, encoding: str | None = None,
+                              max_bytes: int = MAX_BYTES) -> ReferenceImport:
+    """Madde içermeyen başvuru belgesini (ör. puanlama yönergesi) ham metin olarak saklar.
+
+    Ayrıştırma ve yorum yapılmaz; metin birebir `document_raw_units`'e yazılır. Aynı belge
+    ikinci kez kaydedilmez. Belge daha önce envanter belgesi olarak içe aktarıldıysa ham
+    birimleri yeniden yazılmaz, yalnız başvuru olarak işaretlenir."""
+    from .readers import read
+    path = Path(path)
+    if not path.is_file():
+        raise IngestError("not_found", f"{path}: dosya bulunamadı.")
+    real_kind = detect_kind(path, declared=kind, max_bytes=max_bytes)
+    sha, size = sha256_file(path)
+    row = store.conn.execute(
+        "SELECT r.document_id, r.unit_count, d.kind FROM reference_documents r "
+        "JOIN source_documents d ON d.id = r.document_id "
+        "WHERE r.inventory_id=? AND d.sha256=?", (inventory_id, sha)).fetchone()
+    if row is not None:
+        return ReferenceImport(row[0], path.name, sha, row[2], row[1], True)
+    out = read(path, real_kind, encoding=encoding)
+    if not any(u.text.strip() for u in out.units):
+        raise IngestError("no_text", f"{path.name}: belgede okunabilir metin yok (taranmış "
+                                     f"görüntü olabilir; OCR desteklenmiyor).")
+    stored = _store_copy(path, sha, real_kind, documents_dir)
+    with store.transaction() as c:
+        doc_id, _ = store.inventory.add_document(inventory_id, file_name=path.name, sha256=sha,
+                                                 kind=real_kind, size_bytes=size,
+                                                 stored_path=str(stored))
+        _raw_units(c, doc_id, out.units)
+        n = c.execute("SELECT COUNT(*) FROM document_raw_units WHERE document_id=?",
+                      (doc_id,)).fetchone()[0]
+        c.execute("INSERT INTO reference_documents(document_id, inventory_id, unit_count) "
+                  "VALUES (?,?,?)", (doc_id, inventory_id, n))
+    return ReferenceImport(doc_id, path.name, sha, real_kind, n, False, list(out.issues))

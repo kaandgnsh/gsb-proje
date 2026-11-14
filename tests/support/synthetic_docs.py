@@ -216,3 +216,29 @@ def write_json(inv: dict, path: Path, *, answer_key: dict[int, str] | None = Non
         doc["answer_key"] = [{"item": n, "value": v} for n, v in sorted(answer_key.items())]
     Path(path).write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     return Path(path)
+
+
+# ------------------------------------------------------------------- başvuru belgesi
+GUIDE_LINES = [
+    "PUANLAMA YÖNERGESİ (SENTETİK)",
+    "Envanterde dört boyut vardır: E-I, S-N, T-F ve J-P.",
+    "E-I boyutu Dışadönüklük (E) ve İçedönüklük (I) kutuplarından oluşur.",
+    "Her maddede A seçeneği boyutun ilk kutbuna, B seçeneği ikinci kutbuna bir puan verir.",
+    "Ters puanlanan maddelerde bu eşleme tersine çevrilir; 12. madde ters puanlanır.",
+    "Bir boyutta hangi kutup daha yüksek puan alırsa o harf verilir.",
+    "Puanlar eşit çıkarsa İçedönüklük (I) harfi verilir.",
+]
+
+
+def write_guide_pdf(path: Path, lines: list[str] | None = None) -> Path:
+    return write_pdf({"items": []}, path, header=None, footer=False, preamble=False,
+                     items=[], raw_lines=lines or GUIDE_LINES)
+
+
+def write_guide_docx(path: Path, lines: list[str] | None = None) -> Path:
+    import docx
+    d = docx.Document()
+    for line in lines or GUIDE_LINES:
+        d.add_paragraph(line)
+    d.save(path)
+    return Path(path)
