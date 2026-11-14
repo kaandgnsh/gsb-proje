@@ -241,3 +241,66 @@ docs/milestones/M02.md
 5. **netaudit** — test: sabit `/proc` örnekleriyle ihlal tespiti; gerçek süreçte yalnız loopback bağlantısı → ihlal yok.
 6. **kurulum adımları + CLI** — test: `model pull` `--online`/onay olmadan → çıkış 2, sahte sunucuya `/api/pull` gitmez; `--offline` içe aktarma; `doctor` süreç başlatmaz; sürüm ve model digest'i durum dosyasına sabitlenir; `runtime stop` sistem servisine dokunmaz.
 7. **Gerçek entegrasyon** (`tests/integration`, gerçek `/usr/bin/ollama`, geçici `LAI_HOME`, rastgele boş port, sistemdeki modelin **salt okunur** kopyalanarak içe aktarılması): yanıt üretimi; Türkçe talimat; JSON şema çıktısı; uzun metin parçalı analiz; olmayan model; port çakışması; sistem servisi (PID, `/api/tags`, model dizini) değişmedi; `unshare -rn` ile ağsız ad alanında çıkarım; çıkarım sırasında süreç ağacının soketlerinde loopback dışı bağlantı yok; başlat/durdur/yeniden başlat; `accel=cpu` → `size_vram == 0`.
+
+---
+
+## M3 — SQLite ve kalıcı bilgi altyapısı
+
+Kullanıcı kuralları (2026-11-14): şema sürümlü; öğrenilen bilgiler kalıcı; kaynak ve kanıtlar korunur; kullanıcı düzeltmeleri geçmişiyle tutulur; belirsiz kurallar doğrulanmış bilgiye dönüştürülmez; eski değerlendirmeler yeni bilgiyle otomatik değişmez; yedekleme ve geri yükleme. Yalnız sentetik veri. Sisteme kurulum yok.
+
+**Mimari:** `src/lai/store/` (yalnız stdlib `sqlite3`; Qt/AI importu yok). Değişmezlik kuralları **veritabanında** (tetikleyici + CHECK) zorlanır; depo sınıfları ayrıca anlaşılır Türkçe hata verir. Bağlantı `isolation_level=None`, açık `BEGIN IMMEDIATE` işlemleri; `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000`; dosya `0600`.
+
+### Dosyalar
+
+```
+src/lai/__init__.py
+src/lai/store/__init__.py          # Store dışa aktarımı
+src/lai/store/db.py                # open_db, migrate, current_version, SchemaTooNewError, MigrationChecksumError
+src/lai/store/migrations/__init__.py   # MIGRATIONS (sürüm, ad, sql, sha256)
+src/lai/store/migrations/0001_initial.sql
+src/lai/store/enums.py             # Confidence, Source, Validation, QuestionStatus, ResponseKind, AssessmentStatus
+src/lai/store/store.py             # Store.open(path) + transaction() + depolar
+src/lai/store/inventory.py         # envanter, sürüm, belge, kanıt, boyut, kutup, madde, seçenek
+src/lai/store/knowledge.py         # bilgi kayıtları (salt eklenir, sürümlü), düzeltmeler, kanıt bağları
+src/lai/store/questions.py         # gereksinim matrisi, netleştirme soruları, yanıtlar
+src/lai/store/profiles.py          # puanlama profili + donmuş sürümler
+src/lai/store/participants.py      # katılımcı (anonim kod zorunlu), cevap setleri
+src/lai/store/assessments.py       # değişmez değerlendirme kayıtları, geri bildirim
+src/lai/store/backup.py            # backup_database, verify_backup, restore_database
+src/lai_setup/m3_steps.py          # InitDatabase adımı
+src/lai_setup/cli.py               # + db status|backup|restore
+tests/support/synthetic.py         # sentetik envanter/katılımcı üretici (400 madde)
+tests/store/test_*.py
+docs/milestones/M03.md
+```
+
+### Şema v1 (özet)
+
+`schema_migrations`, `app_meta` · `inventories`, `inventory_versions`, `source_documents` (sha256 tekil), `evidence_refs` (belge+sayfa+aralık+alıntı ya da kullanıcı ifadesi/örnek sonuç) · `dimensions`, `poles`, `items`, `options` · `knowledge_entries` (salt eklenir; `entry_key`+`version`+`supersedes_id` zinciri; `kind` fact/rule/note; `rule_type`; JSON `content`; Türkçe `summary`; `item_number`, `dimension_code`; `confidence` 5 düzey; `source` document/user/ai_inference/example_fit/assessment_feedback; `validation` pending/validated/rejected; `confirmation_ref`) · `knowledge_evidence` (supports/contradicts) · `user_corrections` · `requirements` (bütünlük matrisi; durum değişimi tetikleyiciyle geçmişe yazılır) · `clarification_questions` (dedupe_key tekil; 6 alanlı soru içeriği) · `question_responses` (5 yanıt türü) · `learning_history` (salt eklenir; tetikleyicilerle otomatik) · `scoring_profiles`, `scoring_profile_versions` (donmuş anlık görüntü + içerik hash'i + provisional), `profile_version_entries` · `participants` (yalnız `code` zorunlu), `response_sets`, `responses` · `assessments` (değişmez; `recalculated_from`), `assessment_feedback`. Görünümler: `current_knowledge`, `confirmed_rules`, `inferred_rules`, `unresolved_knowledge`, `pending_questions`.
+
+Zorunlu kısıtlar:
+- `CHECK(confidence <> 'CONFIRMED' OR (source IN ('document','user') AND confirmation_ref IS NOT NULL AND validation = 'validated'))`
+- `knowledge_entries`, `user_corrections`, `learning_history`, `question_responses`, `scoring_profile_versions`, `profile_version_entries`, `responses`, `assessments`, `assessment_feedback`: UPDATE/DELETE → `RAISE(ABORT)`.
+- Yeni sürüm yalnız en son sürümün üstüne (`supersedes_id` tekil + aynı anahtar + `version = önceki+1`).
+- `assessments`: `VERIFIED` yalnız `provisional = 0` profil sürümüyle.
+
+### Arayüzler
+
+- `open_db(path, *, readonly=False) -> sqlite3.Connection`; `migrate(conn, *, backup_dir: Path | None) -> MigrationResult(from_version, to_version, backup: Path | None)`; `current_version(conn) -> int`; `LATEST_VERSION: int`.
+- `Store.open(path, *, backup_dir=None) -> Store` (göç uygular); `store.transaction()` bağlam yöneticisi; `store.inventory`, `.knowledge`, `.questions`, `.profiles`, `.participants`, `.assessments`; `store.close()`.
+- `KnowledgeRepo.record(inventory_id, *, entry_key, kind, content: dict, summary, confidence, source, rule_type=None, item_number=None, dimension_code=None, evidence_ids=(), created_by="system") -> Entry`; `.revise(entry_id, *, content=None, summary=None, confidence=None, source, reason, evidence_ids=()) -> Entry` (yeni sürüm); `.confirm(entry_id, *, source: 'user'|'document', confirmation_ref, reason) -> Entry`; `.reject(entry_id, *, reason, by) -> Entry`; `.apply_user_correction(inventory_id, *, entry_key, content, summary, explanation, user_text, target_entry_id=None, kind='rule', rule_type=None, item_number=None, dimension_code=None) -> tuple[Correction, Entry]` (kullanıcı ifadesi kanıtı + CONFIRMED yeni sürüm); `.current(inventory_id, *, kind=None, confidence=None) -> list[Entry]`; `.history(inventory_id, entry_key) -> list[Entry]`.
+- `QuestionRepo.upsert_requirement(inventory_id, *, req_key, category, description, critical, status, reason, dimension_code=None, item_number=None) -> Requirement`; `.matrix(inventory_id) -> list[Requirement]`; `.ask(inventory_id, *, dedupe_key, group_key, missing_info, why_it_matters, related: dict, evidence_summary, impact, question_text, choices: list[str] | None, requirement_id=None) -> tuple[Question, bool]` (ikinci değer: yeni mi; yanıtlanmış ya da açık soru tekrar oluşturulmaz, `later`/`skipped` yeniden açılır); `.respond(question_id, kind, value=None) -> Question`; `.pending(inventory_id) -> list[Question]` (open + later, gruplu sıra).
+- `ProfileRepo.ensure_profile(inventory_id, name) -> int`; `.publish_version(profile_id, *, note) -> ProfileVersion` (güncel kural kayıtlarının donmuş kopyası; hash; `provisional` = kritik gereksinimlerden biri CONFIRMED değil ya da kural CONFIRMED değil); `.versions(profile_id)`; `.get_version(id)`.
+- `ParticipantRepo.create(*, code=None, alias=None, full_name=None, contact=None, category=None, attributes=None) -> Participant` (kod yoksa `ANON-xxxxxxxx`); `.add_response_set(participant_id, inventory_version_id, responses: dict[int, str | None], source_label=None) -> int`.
+- `AssessmentRepo.record(*, response_set_id, profile_version_id, status, results: dict, limitations: list[str], engine_version, recalculated_from=None) -> Assessment` (`input_hash` hesaplanır); `.get(id)`; `.for_response_set(id)`; `.add_feedback(assessment_id, text)`.
+- `backup_database(db_path, dest_dir, *, label="manual") -> BackupInfo(path, sha256, schema_version, created_at)`; `verify_backup(path) -> BackupInfo`; `restore_database(backup_path, db_path, *, safety_dir) -> RestoreResult(restored, safety_backup)`.
+
+### Görevler (TDD)
+
+1. **db + göç + şema v1** — test: boş dosyada v1 kurulur; ikinci açılış hiçbir şey yapmaz; `user_version` > LATEST → `SchemaTooNewError` ve dosya değişmez; göç dosyası değişmişse `MigrationChecksumError`; yarıda hata → geri alınır (sürüm değişmez); dosya izni `0600`; tüm tablolar/görünümler var.
+2. **değişmezlik ve güven kuralları (SQL düzeyi)** — test: her salt-eklenir tabloda UPDATE/DELETE reddedilir; `ai_inference` kaynaklı CONFIRMED eklenemez; onay referanssız CONFIRMED eklenemez; ara sürümün üstüne dal açılamaz; provisional profille VERIFIED değerlendirme eklenemez.
+3. **knowledge** — test: record/revise zinciri ve `current` yalnız son sürüm; `history` tüm sürümler; kullanıcı düzeltmesi: yeni CONFIRMED sürüm + `user_corrections` + kullanıcı ifadesi kanıtı, eskisi aynen duruyor; `confirm` ai kaynağıyla çağrılırsa `ValueError`; her işlem `learning_history`'ye düşer.
+4. **questions** — test: aynı `dedupe_key` ikinci kez yeni soru üretmez; yanıtlanan soru tekrar sorulmaz; `later` → `pending`'de kalır, kalıcıdır (yeniden açılan Store'da da); 5 yanıt türü; gereksinim durum değişimi geçmişe yazılır.
+5. **profiles + participants + assessments** — test: yayımlanan sürüm sonraki bilgi değişikliğinden etkilenmez (hash ve içerik aynı); yeni sürüm yeni satır; anonim katılımcı (yalnız kod); eksik yanıt `None`; değerlendirme kaydı değişmez, yeni profil sürümüyle yeniden hesap yeni satır (`recalculated_from`), eskisi aynen.
+6. **backup/restore** — test: yedek bütünlüğü + sha256 + sürüm; bozuk yedek reddedilir ve hedef değişmez; geri yükleme öncesi güvenlik yedeği; göç öncesi otomatik yedek; WAL'deki işlenmiş veri yedekte var.
+7. **kurulum adımı + CLI + sentetik ölçek** — test: `install` DB'yi kurar, ikinci kez ATLANDI; `doctor` salt okunur (dosya mtime değişmez); `db backup/restore/status`; `uninstall` DB ve yedekleri korur; 400 madde + 200 katılımcı × 400 yanıt yükleme < 10 sn ve bütünlük denetimi `ok`.
