@@ -159,7 +159,7 @@ def parse_text_units(units: list[RawUnit]):
                 add_option(code, text, _sub_locator(u.locator, rest_off + off, len(t) - off), u.index)
             continue
         om = _OPT.match(t)
-        if om and om.group("rest"):
+        if om and (om.group("rest") or cur is not None):
             code = om.group("code")
             if before_first:
                 _, inline = _split_inline(t, code)
@@ -172,7 +172,7 @@ def parse_text_units(units: list[RawUnit]):
                                     u.locator))
                 continue
             _, inline = _split_inline(t, code)
-            for c, text, off in inline or [(code, om.group("rest").strip(), 0)]:
+            for c, text, off in inline or [(code, (om.group("rest") or "").strip(), 0)]:
                 add_option(c, text, _sub_locator(u.locator, lead + off, len(t) - off), u.index)
             continue
         if _is_heading(t):
@@ -181,11 +181,11 @@ def parse_text_units(units: list[RawUnit]):
             cur, cur_opt = None, None
             continue
         if cur_opt is not None:
+            was_empty = not cur_opt.text
             cur_opt.text = f"{cur_opt.text} {t}".strip()
-            cur_opt_loc = cur_opt.locator
-            cur_opt.locator = cur_opt_loc.span_to(u.locator)
+            cur_opt.locator = cur_opt.locator.span_to(u.locator)
             cur.raw_last = u.index
-            if cur.seq not in multiline_flagged:
+            if not was_empty and cur.seq not in multiline_flagged:
                 multiline_flagged.add(cur.seq)
                 issues.append(Issue(WARNING, "multiline_option",
                                     f"Madde {cur.number}: bir seçenek birden çok satıra yayılıyor; "
