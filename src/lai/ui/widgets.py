@@ -2,7 +2,7 @@
 
 import math
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -158,6 +159,8 @@ def tree_value(parent, key, value):
 
 
 class ResultDialog(QDialog):
+    export_requested = Signal(int, str)
+
     def __init__(self, assessment, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Değerlendirme sonucu ve hesap dökümü")
@@ -205,6 +208,63 @@ class ResultDialog(QDialog):
                 tree_value(node, title, d.get(k))
         self.trace.setColumnWidth(0, 430)
         layout.addWidget(self.trace, 3)
+        self.export_format = QComboBox()
+        self.export_format.addItems(["PDF", "XLSX", "CSV", "JSON"])
+        self.export_format.setAccessibleName("Rapor biçimi")
+        layout.addWidget(self.export_format)
+        export = QPushButton("Raporu dışa &aktar")
+        export.setObjectName("export_result")
+        export.clicked.connect(
+            lambda: self.export_requested.emit(
+                assessment["id"], self.export_format.currentText().lower()
+            )
+        )
+        layout.addWidget(export)
+        close = QPushButton("&Kapat")
+        close.clicked.connect(self.close)
+        layout.addWidget(close)
+
+
+class ReportPreview(QDialog):
+    """Yerel dosyayı salt okunur açar; çalışma sayfası formülü yürütmez."""
+
+    def __init__(self, preview, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Rapor önizleme — " + preview["path"])
+        self.setObjectName("report_preview")
+        self.resize(1100, 800)
+        layout = QVBoxLayout(self)
+        if preview["kind"] == "pdf":
+            from PySide6.QtPdf import QPdfDocument
+            from PySide6.QtPdfWidgets import QPdfView
+
+            self.document = QPdfDocument(self)
+            error = self.document.load(preview["path"])
+            if error != QPdfDocument.Error.None_:
+                raise ValueError("PDF görüntüleyicide açılamadı: " + str(error))
+            layout.addWidget(
+                label(f"PDF · {self.document.pageCount()} sayfa · salt okunur")
+            )
+            self.view = QPdfView(self)
+            self.view.setDocument(self.document)
+            self.view.setPageMode(QPdfView.PageMode.MultiPage)
+            self.view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+            layout.addWidget(self.view)
+        else:
+            layout.addWidget(
+                label(
+                    "Excel — salt okunur; her sayfanın ilk 500 satırı. Formüller yürütülmez."
+                )
+            )
+            self.tabs = QTabWidget()
+            for sheet in preview["sheets"]:
+                data = sheet["rows"]
+                width = max((len(r) for r in data), default=0)
+                widget = table(data[0] if data else [], "report_sheet")
+                widget.setColumnCount(width)
+                rows(widget, data[1:])
+                self.tabs.addTab(widget, sheet["name"])
+            layout.addWidget(self.tabs)
         close = QPushButton("&Kapat")
         close.clicked.connect(self.close)
         layout.addWidget(close)

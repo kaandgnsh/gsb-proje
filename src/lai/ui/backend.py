@@ -102,6 +102,56 @@ class Backend:
         }
 
     def _perform(self, s, op, a, cancel, progress, check):
+        if op == "preview_report":
+            path = Path(a["path"])
+            if path.suffix.lower() == ".pdf":
+                import pymupdf
+
+                with pymupdf.open(path) as doc:
+                    pages = len(doc)
+                return {
+                    "preview_report": {"path": str(path), "kind": "pdf", "pages": pages}
+                }
+            if path.suffix.lower() == ".xlsx":
+                from openpyxl import load_workbook
+
+                wb = load_workbook(
+                    path, read_only=True, data_only=False, keep_links=False
+                )
+                try:
+                    sheets = []
+                    for sheet in wb:
+                        data = []
+                        for n, row in enumerate(sheet.iter_rows(values_only=True)):
+                            check()
+                            if n >= 500:
+                                break
+                            data.append([str(v) if v is not None else "" for v in row])
+                        sheets.append({"name": sheet.title, "rows": data})
+                    return {
+                        "preview_report": {
+                            "path": str(path),
+                            "kind": "xlsx",
+                            "sheets": sheets,
+                        }
+                    }
+                finally:
+                    wb.close()
+            raise ValueError("Uygulama içi önizleme PDF ve XLSX için kullanılabilir")
+        if op in ("export_assessment", "export_job"):
+            from lai.reports.service import export_assessment, export_job
+
+            fn = export_assessment if op == "export_assessment" else export_job
+            return {
+                "exported": fn(
+                    s,
+                    a["id"],
+                    a["target"],
+                    a["format"],
+                    cancel=cancel.is_set,
+                    progress=progress,
+                )
+            }
         if op == "refresh":
             return {}
         if op == "create_inventory":

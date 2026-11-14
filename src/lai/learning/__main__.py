@@ -188,9 +188,14 @@ def main(argv=None) -> int:
     sp["answer"].add_argument("--model", default="qwen3.5:4b")
     from lai.assessment.cli import add_commands
     add_commands(sub)
+    from lai.reports.cli import add_commands as add_reports
+    add_reports(sub)
     a = p.parse_args(argv)
     store = _store(a)
     try:
+        from lai.reports.cli import COMMANDS as REPORT_COMMANDS, run as run_report
+        if a.cmd in REPORT_COMMANDS:
+            return run_report(a, store)
         from lai.assessment.cli import COMMANDS, run
         if a.cmd in COMMANDS:
             return run(a,store)

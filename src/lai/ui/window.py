@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -34,6 +34,7 @@ from .backend import Backend
 from .tasks import Task
 from .theme import apply_theme
 from .widgets import (
+    ReportPreview,
     ResultDialog,
     RuleEditor,
     label,
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow):
         self.operation = ""
         self.followup = None
         self.job_id = None
+        self.last_export = None
         self.history_offset = 0
         self.history_total = 0
         self.preferences = self._read_preferences()
@@ -129,6 +131,11 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(False)
         status.addWidget(self.status, 1)
         status.addWidget(self.progress)
+        self.open_export_button = QPushButton("Dosyayı &aç")
+        self.open_export_button.setObjectName("open_export")
+        self.open_export_button.setEnabled(False)
+        self.open_export_button.clicked.connect(self.open_export)
+        status.addWidget(self.open_export_button)
         status.addWidget(self.cancel_button)
         outer.addLayout(status)
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
@@ -494,6 +501,26 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.jobs, 1)
         h = QHBoxLayout()
         h.addWidget(self.button("İşi &aç", self.open_job, "open_job"))
+        self.batch_export_format = QComboBox()
+        for title, code in [
+            ("CSV", "csv"),
+            ("XLSX", "xlsx"),
+            ("Tekil PDFler (ZIP)", "pdf"),
+        ]:
+            self.batch_export_format.addItem(title, code)
+        self.batch_export_format.setAccessibleName("Toplu rapor biçimi")
+        h.addWidget(self.batch_export_format)
+        h.addWidget(
+            self.button(
+                "Raporu dışa aktar",
+                lambda: self.select_export(
+                    self.selected_job(),
+                    self.batch_export_format.currentData(),
+                    job=True,
+                ),
+                "export_job",
+            )
+        )
         h.addWidget(self.button("&Başlat / devam et", self.run_selected_job, "run_job"))
         self.pause_job = QPushButton("&Duraklat")
         self.pause_job.setObjectName("pause_job")
@@ -542,6 +569,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.history)
         h = QHBoxLayout()
         h.addWidget(self.button("Seçilen sonucu &aç", self.open_history, "open_result"))
+        self.history_export_format = QComboBox()
+        self.history_export_format.addItems(["PDF", "XLSX", "CSV", "JSON"])
+        self.history_export_format.setAccessibleName("Geçmiş rapor biçimi")
+        h.addWidget(self.history_export_format)
+        h.addWidget(self.button("Dışa aktar", self.export_history, "export_history"))
         h.addWidget(
             self.button(
                 "Tekil ekrandaki profille yeniden değerlendir",
@@ -652,6 +684,7 @@ class MainWindow(QMainWindow):
             )
 
     def set_busy(self, busy):
+        self.open_export_button.setEnabled(not busy and self.last_export is not None)
         for w in self.controls + self.inputs + [self.inventory]:
             w.setEnabled(not busy)
         self.cancel_button.setEnabled(busy)
@@ -675,6 +708,16 @@ class MainWindow(QMainWindow):
         self.status.setText("İşlem tamamlandı.")
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
+        if "preview_report" in data:
+            dialog = ReportPreview(data["preview_report"], self)
+            self.dialogs.append(dialog)
+            dialog.show()
+            self.status.setText(
+                "Rapor salt okunur açıldı: " + data["preview_report"]["path"]
+            )
+        if "exported" in data:
+            self.last_export = data["exported"]
+            self.status.setText("Rapor kaydedildi: " + self.last_export["path"])
         if "preview" in data:
             self.preview = data["preview"]
             p = self.preview
@@ -773,6 +816,11 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, lambda: self.start(op, args))
 
     def update_progress(self, data):
+        if "phase" in data:
+            total = data["total"]
+            self.progress.setRange(0, max(total, 1))
+            self.progress.setValue(data["done"])
+            self.status.setText(f"Rapor hazırlanıyor: {data['done']}/{total}")
         self.status.setText(data.get("message", "İşlem sürüyor…"))
         if "value" in data:
             self.progress.setRange(0, 100)
@@ -1087,9 +1135,67 @@ class MainWindow(QMainWindow):
 
     def show_result(self, assessment):
         dialog = ResultDialog(assessment, self)
+        dialog.export_requested.connect(self.select_export)
         self.dialogs.append(dialog)
         dialog.show()
         self.last_result = assessment
+
+    def export_history(self):
+        index = self.history.currentRow()
+        if index < 0:
+            raise ValueError("Dışa aktarılacak değerlendirmeyi seçin")
+        self.select_export(
+            self.history_data[index]["id"],
+            self.history_export_format.currentText().lower(),
+        )
+
+    def export_path(self, format, job=False):
+        suffix = "zip" if job and format == "pdf" else format
+        dialog = QFileDialog(self, "Raporu kaydet")
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        dialog.setAcceptMode(QFileDialog.AcceptSave)
+        dialog.setFileMode(QFileDialog.AnyFile)
+        dialog.setDirectory(str(self.db.parent))
+        dialog.setDefaultSuffix(suffix)
+        dialog.setNameFilter(f"Rapor (*.{suffix})")
+        for role, value in [
+            (QFileDialog.Accept, "Kaydet"),
+            (QFileDialog.Reject, "Vazgeç"),
+            (QFileDialog.FileName, "Dosya adı:"),
+            (QFileDialog.FileType, "Dosya türü:"),
+            (QFileDialog.LookIn, "Kayıt yeri:"),
+        ]:
+            dialog.setLabelText(role, value)
+        return (
+            dialog.selectedFiles()[0]
+            if dialog.exec() and dialog.selectedFiles()
+            else None
+        )
+
+    def select_export(self, id, format, job=False):
+        if self.task is not None:
+            self.status.setText(
+                "Önce etkin işlemin tamamlanmasını bekleyin veya iptal edin."
+            )
+            return
+        target = self.export_path(format, job)
+        if target:
+            self.start(
+                "export_job" if job else "export_assessment",
+                {"id": id, "target": target, "format": format},
+            )
+
+    def open_export(self):
+        if self.last_export and Path(self.last_export["path"]).suffix.lower() in (
+            ".pdf",
+            ".xlsx",
+        ):
+            self.start("preview_report", {"path": self.last_export["path"]})
+            return
+        if self.last_export and not QDesktopServices.openUrl(
+            QUrl.fromLocalFile(self.last_export["path"])
+        ):
+            self.error("Dosya açılamadı; bu biçim için yerel görüntüleyici bulunamadı.")
 
     def preview_responses(self):
         self.invalidate_batch()
