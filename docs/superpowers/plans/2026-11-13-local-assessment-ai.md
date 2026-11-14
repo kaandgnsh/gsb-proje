@@ -515,3 +515,29 @@ incelendi. Referans doğrulaması 699 geçti, 16 gerçek entegrasyon seçilmedi,
 
 Ana planın M10 kapsamı model yorumu gerektirmiyor. Rapor açıklamaları güvenilir
 kayıt alanlarından şablonla üretilir; model bağımlılığı ve çağrısı eklenmez.
+
+## M11 — Linux ağ yalıtımı ve güvenli başlatma (2026-11-15)
+
+Başlangıç: M02 ve M10 raporları, ana planın M11 satırı ve runtime/UI başlangıcı
+incelendi. Referans 729 geçti, 16 gerçek entegrasyon seçilmedi, 239,93 saniye.
+
+1. Bubblewrap kullanıcı/ağ/PID/mount/IPC ad alanları, özel loopback, yetkisiz
+   süreçler; GUI kodundan önce seccomp/no_new_privs. Yalnız önceden bağlanmış
+   Wayland görüntü soketi; yeni Unix/VSOCK/PACKET/NETLINK soketleri ve namespace/FD
+   kaçışları kapalı. Standart bağlı soket reddi ve fazla FD'lerin kapatılması.
+2. Masaüstü ve üretilen kısayollar yalıtım olmadan değerlendirme açmayacak.
+   Türkçe önkoşul/çözüm mesajı. Windows doğrulanmadan güvenli kapalı kalacak.
+3. Uygulamanın kendi runtime yöneticisini aynı sınır içinde kullan; mevcut
+   sistem servisine/deposuna ve diğer araç ayarlarına yazma yok. İndirme yok.
+4. Dış dünya da izole kontrollü laboratuvar: IPv4/IPv6 TCP/UDP/DNS; loopback ve
+   dosya/abstract Unix proxy; gerçek glibc nss-resolve → sahte resolved varlink.
+   Yalıtımsız pozitif kontrol, namespace-only sızıntı kontrolü, korunan ana/alt/servis süreçleri.
+5. Çevrimdışı servis akışı + gerçek Wayland belge/öğrenme/tekil/toplu devam,
+   yerel dosya seçici ve PDF/Excel önizleme; süreç sahipliği ve kapanış.
+6. Salt okunur `doctor --network --pid`, URL taraması; örnekleme engelleme kanıtı
+   sayılmayacak. Tam takım, M11/güvenlik raporları, yerel commitler; push ve M12 yok.
+
+Gerçek Windows ve mevcut model bulunmazsa gerçek çıkarım bekleyen doğrulamadır.
+M12 planına Windows WFP/AppContainer/alt süreç/loopback ve gerçek GUI doğrulama
+adımları yazılır; M12 uygulanmaz. Dosya çıktıları ve güvenilen görüntü sunucusu,
+uygulamanın doğrudan ağ/IPC sınırından ayrı güven ilişkileridir.
