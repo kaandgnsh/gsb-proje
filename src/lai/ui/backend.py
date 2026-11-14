@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -35,10 +36,39 @@ class Backend:
     def __init__(self, db, *, llm_factory=None):
         self.db = Path(db)
         self.llm_factory = llm_factory
+        self._runtime = None
+
+    def shutdown(self):
+        if self._runtime is not None:
+            self._runtime.stop()
+
+    def start_runtime(self, args):
+        from lai_runtime.config import RuntimeConfig
+        from lai_runtime.process import RuntimeManager
+        from lai_runtime.sandbox import require_isolation
+        from lai_setup.paths import resolve_paths
+
+        require_isolation()
+        cfg = RuntimeConfig(
+            port=args.get("port", 11435), model=args.get("model", "qwen3.5:4b")
+        )
+        if self._runtime is not None and self._runtime.cfg != cfg:
+            if not self._runtime.stop() and self._runtime.status().running:
+                raise RuntimeError(
+                    "Önceki uygulama süreci kapatılamadı; yeni süreç başlatılmadı"
+                )
+            self._runtime = None
+        if self._runtime is None:
+            paths = resolve_paths("linux", os.environ, Path.home())
+            paths.runtime.mkdir(parents=True, exist_ok=True)
+            self._runtime = RuntimeManager(cfg, paths)
+        return self._runtime.start()
 
     def _llm(self, args):
         if self.llm_factory:
             return self.llm_factory()
+        if os.environ.get("LAI_SANDBOX_ACTIVE"):
+            self.start_runtime(args)
         from lai.ai.llm import OllamaLLM
         from lai_runtime.config import RuntimeConfig
 
@@ -102,6 +132,14 @@ class Backend:
         }
 
     def _perform(self, s, op, a, cancel, progress, check):
+        if op == "runtime_start":
+            result = self.start_runtime(a)
+            return {
+                "runtime_message": f"Uygulamaya ait Ollama başladı: pid {result.pid}, port {result.port}. Ağ yalıtımı etkin."
+            }
+        if op == "runtime_stop":
+            self.shutdown()
+            return {"runtime_message": "Yalnız uygulamaya ait süreç durduruldu."}
         if op == "preview_report":
             path = Path(a["path"])
             if path.suffix.lower() == ".pdf":

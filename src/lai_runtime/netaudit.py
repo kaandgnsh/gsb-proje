@@ -158,3 +158,29 @@ class NetworkMonitor:
         self._stop.set()
         self._t.join()
         self.sample()
+
+
+def diagnostic(pid: int) -> dict:
+    """Salt okunur anlık örnek: Unix uçlarını görünür kılar, yalıtım kanıtı değildir."""
+    from dataclasses import asdict
+
+    if pid < 1 or not (PROC / str(pid)).is_dir():
+        raise ValueError('Denetlenecek süreç bulunamadı')
+    pids = process_tree(pid)
+    conns = sockets_of(pids)
+    unix = []
+    for child in pids:
+        directory = PROC / str(child)
+        inodes = _socket_inodes(directory)
+        try:
+            lines = (directory / 'net/unix').read_text().splitlines()[1:]
+        except OSError:
+            continue
+        for line in lines:
+            fields = line.split(maxsplit=7)
+            if len(fields) >= 7 and fields[6] in inodes:
+                unix.append({'pid':child, 'inode':fields[6], 'path':fields[7] if len(fields)>7 else None})
+    return {'pid':pid, 'processes':pids, 'connections':[asdict(c) for c in conns],
+            'violations':violations(conns), 'unix_sockets':unix, 'sampling_only':True,
+            'enforcement_verified':False,
+            'notice':'Anlık soket örneği yalıtım kanıtı değildir; Unix broker uçları ayrıca incelenmelidir. M11 çekirdek/pozitif kontrollü testlerini kullanın.'}

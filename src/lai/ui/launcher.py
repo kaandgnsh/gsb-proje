@@ -25,7 +25,11 @@ def generate(output, db, *, platform=None, python=None):
             return '"' + str(value).replace("%", "%%") + '"'
 
         target.write_text(
-            "@echo off\r\n" + quote(python) + " " + quote(script.absolute()) + "\r\n",
+            "@echo off\r\n"
+            + quote(python)
+            + " "
+            + quote(script.absolute())
+            + "\r\nif errorlevel 1 pause\r\n",
             encoding="utf-8",
         )
     else:
@@ -38,7 +42,7 @@ def generate(output, db, *, platform=None, python=None):
 
         target = output / "yerel-envanter.desktop"
         target.write_text(
-            "[Desktop Entry]\nType=Application\nName=Yerel Envanter\nComment=Çevrimdışı değerlendirme ve öğrenme\nTerminal=false\nExec="
+            "[Desktop Entry]\nType=Application\nName=Yerel Envanter\nComment=Çevrimdışı değerlendirme ve öğrenme\nTerminal=true\nExec="
             + quote(python)
             + " "
             + quote(script.absolute())

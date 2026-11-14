@@ -55,6 +55,8 @@ def _parser() -> argparse.ArgumentParser:
 
     doc = sub.add_parser("doctor", parents=[common], help="salt okunur sağlık denetimi")
     doc.add_argument("--json", action="store_true")
+    doc.add_argument("--network", action="store_true", help="yalnız salt okunur süreç ağacı soket denetimi; yalıtım kanıtı değildir")
+    doc.add_argument("--pid", type=int, help="--network için denetlenecek süreç kimliği")
     doc.add_argument("--save-report", action="store_true", help="raporu logs/ altına da yaz")
 
     m = sub.add_parser("model", parents=[common], help="yapay zekâ modeli işlemleri")
@@ -100,6 +102,16 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
          input_fn: Callable[[str], str] = input, fs_root: Path = Path("/"),
          http_get=None, platform: str | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.cmd == "doctor" and args.network:
+        from lai_runtime.netaudit import diagnostic
+        try:
+            data = diagnostic(args.pid if args.pid is not None else os.getpid())
+        except (OSError, ValueError) as error:
+            print("Ağ denetimi yapılamadı (Linux /proc gerekir): " + str(error), file=sys.stderr)
+            return EXIT_FAIL
+        print(json.dumps(data, ensure_ascii=False, indent=2) if args.json else
+            data["notice"] + "\n" + "\n".join(data["violations"]) + f"\nUnix soket sayısı: {len(data['unix_sockets'])}")
+        return EXIT_FAIL if data["violations"] else EXIT_OK
     env = dict(os.environ if env is None else env)
     if getattr(args, "lai_home", None):
         env["LAI_HOME"] = args.lai_home

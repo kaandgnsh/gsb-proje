@@ -594,7 +594,7 @@ class MainWindow(QMainWindow):
 
     def settings_page(self):
         layout = self.page(
-            "Yerel model isteğe bağlıdır. Bu ekran servis başlatmaz, model indirmez veya sistem ayarlarını değiştirmez."
+            "Yerel model isteğe bağlıdır. Uygulamanın kendi Ollama süreci ağ yalıtımı içinde başlatılır. Model indirilmez; sistem servisine dokunulmaz."
         )
         form = QFormLayout()
         self.port = QSpinBox()
@@ -606,6 +606,17 @@ class MainWindow(QMainWindow):
         form.addRow("Uygulamanın yerel model portu (11434 kullanılamaz)", self.port)
         form.addRow("Yerel model adı", self.model)
         layout.addLayout(form)
+        for title, operation in [
+            ("Uygulamanın Ollama sürecini başlat", "runtime_start"),
+            ("Uygulamanın Ollama sürecini durdur", "runtime_stop"),
+        ]:
+            layout.addWidget(
+                self.button(
+                    title,
+                    lambda op=operation: self.start(op, self.model_args()),
+                    operation,
+                )
+            )
         layout.addWidget(
             self.button(
                 "Yerel model durumunu &kontrol et",
@@ -796,6 +807,8 @@ class MainWindow(QMainWindow):
             self.followup = ("learning", {"inventory_id": self.inv()})
         if "model_status" in data:
             self.model_message.setText(data["model_status"]["message"])
+        if "runtime_message" in data:
+            self.model_message.setText(data["runtime_message"])
             self.learning_model_notice.setText(data["model_status"]["message"])
 
     def finished(self):
