@@ -81,6 +81,7 @@ class RawUnit:
     index: int
     text: str
     locator: Locator
+    cells: tuple[str, ...] | None = None   # tablo satırlarında hücreler (metin = JSON dizisi)
 
 
 @dataclass
