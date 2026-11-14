@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1–M5 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1–M6 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -83,3 +83,40 @@ olarak doğrulanır. Hiçbir aday kendiliğinden doğrulanmış (CONFIRMED) say�
 ```
 Örnek sonuç biçimi (`lai-examples` sürüm 1) `src/lai/learning/examples.py`, kural kataloğu
 `src/lai/core/rules.py` içinde belgelenmiştir.
+
+
+## Eksik bilgi ve kalıcı öğrenme (M6)
+
+Depo kökünde `PYTHONPATH=src` ile (kurulu pakette gerekmez):
+
+```bash
+python -m lai.learning missing --db /veri/lai.db --inventory "Sentetik Envanter"
+python -m lai.learning missing --db /veri/lai.db --inventory "Sentetik Envanter" --all --json
+python -m lai.learning answer --db /veri/lai.db --inventory "Sentetik Envanter" --question 1 --action later
+python -m lai.learning answer --db /veri/lai.db --inventory "Sentetik Envanter" --question 1 --action resume --text "Yeni bilgi geldi"
+python -m lai.learning answer --db /veri/lai.db --inventory "Sentetik Envanter" --question 1 --action teach --text "X boyutunun maddeleri" --structured '{"rule_type":"dimension_items","body":{"dimension":"X","items":[1,2]}}'
+```
+
+`missing` örnek uyumunu yeniden sınar; kritik eksikleri, etki alanını, kanıtları ve
+Türkçe soruları gruplar. `--all` ertelenmiş, reddedilmiş, bilinmeyen yanıtlı ve çözülmüş
+soruları da gösterir. Her kayıt kalıcı bir soru kimliğine sahiptir.
+
+Yanıt eylemleri: `yes` (gösterilen öneriyi açık onay), `no`, `text` (açıklama),
+`unknown`, `later`, `reject` (kullanma), `correct` (açıklamalı düzeltme), `resume`.
+`teach` açık yapılandırılmış kullanıcı bilgisini şema ve envanter denetiminden geçirir.
+Puanlama katalogu dışındaki açıklamalar ayrı bilgi kaydıdır; çalıştırılabilir formüle dönüşmez.
+
+Serbest metni yerel modelle yorumlamak isteğe bağlıdır:
+
+```bash
+python -m lai.learning answer --db /veri/lai.db --inventory "Sentetik Envanter" --question 1 --action text --text "Birinci madde X boyutunda ters puanlanır" --interpret-with-model --port 11435 --model YEREL_MODEL
+```
+
+Bu komut model indirmez veya servis başlatmaz; mevcut uygulama modeline bağlanır.
+11434 yasaktır. Model yorumu `WEAKLY_INFERRED` kalır; kullanıcı öneriyi inceledikten sonra
+`--action yes` ile doğrulayabilir. Model yoksa kullanıcı metni kaybolmadan `UNKNOWN` tutulur.
+`--action interpret --structured …`, bağdaştırıcıların doğrulanmamış öneri kaydetmesi içindir.
+
+Onay veya düzeltmeden sonra ilgili kurallar yeniden sınanır, sorular güncellenir ve değişiklik
+varsa yeni profil sürümü oluşur. Eski değerlendirmeler ve profil sürümleri değişmez.
+Ayrıntılar ve test sınırları: [M6 raporu](docs/milestones/M06.md).
