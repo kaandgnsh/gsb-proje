@@ -446,3 +446,28 @@ ata doğrulamasıyla kontrol edilir; başlangıç referansı 513 teknik testtir.
 
 Sayısal/formül semantiği gerçek envanterden çıkarılmış varsayımlar değildir. Parametre
 anlamı belirsiz normalizasyon ve M6 serbest metin bilgisi puanlama koduna dönüştürülmez.
+
+---
+
+## M8 — Tekil ve toplu değerlendirme (2026-11-14)
+
+Referans M7: 602 teknik test; 0,0079 sn yalnız motor süresidir. M8 toplam ölçümü
+CSV/XLSX okuma, sütun/cevap doğrulaması, puanlama ve SQLite kaydını kapsayacaktır.
+
+1. M07, ana plan ve mevcut assessment/participant/response depolarını incele;
+   başlangıç takımını çalıştır. Yalnız sentetik veri, model/kurulum/dış servis yok.
+2. CSV/XLSX ön doğrulayıcı: açık veya kesin sütun eşlemesi, envanter soruları,
+   kimlik/takma ad, boş cevap, satır/seçenek/tekrar hataları ve Türkçe kaynak konumu.
+   Şema hatası katılımcı yazmadan reddedilir; satır hataları bağımsız saklanır.
+3. Şema v6: sürümleri ve kaynak/girdi snapshot'ını sabitleyen işler; katılımcı başına
+   pending/succeeded/partial/failed satırlar, sonuç bağlantısı ve denetim geçmişi.
+4. Tekil ve toplu akış aynı `lai.scoring.evaluate` girişini kullanır. Katılımcı,
+   cevap seti, değişmez değerlendirme ve iş satırı tek transaction içindedir.
+   Satır başına SQLite yazma kilidi ve yeniden pending kontrolü mükerrer sonucu önler.
+5. Durum/ilerleme, duraklatma, güvenli iptal ve tekrar devam; kesintide satırın tamamı
+   geri alınır. İş kaynak dosyasını tekrar okumaz veya güncel profil seçmez.
+6. Mevcut `python -m lai.learning` CLI'ına assess/batch/job/rescore ekle. Kimlik veya
+   takma ad yeterli; ad/e-posta/telefon isteğe bağlıdır. Yeniden hesap yeni kayıttır.
+7. Tekil/toplu motor eşitliği, kısmi/engellenmiş boyut, hata yalıtımı, crash/continue,
+   çift çalışan, sürüm sabitleme, CSV/XLSX ve 400×200 toplam süre testleri.
+8. Tam regresyon ve M08 raporu; ayrı yerel commit'ler, push yok. M9'a geçme.
