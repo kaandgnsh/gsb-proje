@@ -125,3 +125,42 @@ def canonical(rule_type: str, body: dict) -> str:
     if rule_type == "dimension_items":
         b["items"] = sorted(b["items"])
     return json.dumps(b, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+_POLICY_TR = {"skip": "hesaba katılmaz", "count_as_pole": "kutba sayılır", "invalidate": "boyut "
+              "geçersiz sayılır"}
+
+
+def describe_rule(rule_type: str, body: dict) -> str:
+    """Kullanıcıya gösterilecek kısa Türkçe özet."""
+    d = body.get("dimension")
+    if rule_type == "dimension_def":
+        return f"{d} boyutunun kutupları: {', '.join(body['poles'])}"
+    if rule_type == "dimension_items":
+        it = sorted(body["items"])
+        s = ", ".join(map(str, it[:10])) + (f" … ({len(it)} madde)" if len(it) > 10 else "")
+        return f"{d} boyutunun maddeleri: {s}"
+    if rule_type == "default_option_map":
+        return f"{d}: varsayılan eşleme " + ", ".join(f"{c}→{p}" for c, p in body["options"].items())
+    if rule_type == "item_pole_map":
+        return f"{d}: {body['item']}. madde " + ", ".join(f"{c}→{p}"
+                                                         for c, p in body["options"].items())
+    if rule_type == "option_weight":
+        w = "; ".join(f"{c}: " + ", ".join(f"{p} {v:g}" for p, v in pts.items())
+                      for c, pts in body["weights"].items())
+        return f"{d}: {body['item']}. madde ağırlıkları ({w})"
+    if rule_type == "reverse":
+        return f"{d}: {body['item']}. madde ters puanlanır"
+    if rule_type == "threshold":
+        if body["method"] == "higher_wins":
+            return f"{d}: puanı yüksek olan kutbun harfi verilir"
+        return f"{d}: {body['pole']} için en az {body['value']:g} puan gerekir"
+    if rule_type == "tie_break":
+        return f"{d}: puanlar eşitse {body['pole']}"
+    if rule_type == "missing_answer_policy":
+        scope = "tüm boyutlar" if d == "*" else d
+        extra = f" ({body['pole']})" if "pole" in body else ""
+        return f"{scope}: cevapsız madde {_POLICY_TR[body['policy']]}{extra}"
+    if rule_type == "normalization":
+        return f"{d}: normalleştirme ({body['method']})"
+    return f"{rule_type}: {canonical(rule_type, body)}"

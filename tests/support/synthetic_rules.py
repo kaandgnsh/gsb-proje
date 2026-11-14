@@ -73,3 +73,26 @@ def make_examples(n_items: int, n: int, reverse: set[int], *, seed: int = 11,
         exs.append({"id": f"Ö-{k + 1}", "answers": {str(i): a for i, a in ans.items()},
                     "result": res})
     return {"format": "lai-examples", "version": 1, "examples": exs}
+
+
+# ------------------------------------------------------------------- sentetik yönerge
+def guide_statements(n_items: int, reverse: set[int]) -> list[tuple[str, str, dict]]:
+    """(cümle, kural türü, gövde): yönergede yazan cümle ve ondan çıkarılması beklenen kural."""
+    out = []
+    for d, (p1, p2) in DIMS.items():
+        items = [i for i in range(1, n_items + 1) if dim_of(i) == d]
+        out += [
+            (f"{d} boyutu {p1} ve {p2} kutuplarından oluşur.", "dimension_def",
+             {"dimension": d, "poles": [p1, p2]}),
+            (f"{d} boyutunun maddeleri: {', '.join(map(str, items))}.", "dimension_items",
+             {"dimension": d, "items": items}),
+            (f"{d} boyutunda A seçeneği {p1}, B seçeneği {p2} kutbuna bir puan verir.",
+             "default_option_map", {"dimension": d, "options": {"A": p1, "B": p2}}),
+            (f"{d} boyutunda puanı yüksek olan kutbun harfi verilir.", "threshold",
+             {"dimension": d, "method": "higher_wins"}),
+            (f"{d} boyutunda puanlar eşitse {p2} harfi verilir.", "tie_break",
+             {"dimension": d, "pole": p2}),
+        ]
+    for i in sorted(reverse):
+        out.append((f"{i}. madde ters puanlanır.", "reverse", {"item": i, "dimension": dim_of(i)}))
+    return out
