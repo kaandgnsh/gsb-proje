@@ -1,18 +1,7 @@
 """Serbest metin ayrıştırıcı: madde/seçenek ayrımı, sıra, konum, cevap anahtarı."""
-from lai.ingest.model import Locator, RawUnit
+from ingest_helpers import U
+
 from lai.ingest.textparse import parse_text_units
-
-
-def U(*pages):
-    """U(["satır", ...], ["2. sayfa satırı", ...]) → RawUnit listesi (PDF benzeri)."""
-    out = []
-    for pno, lines in enumerate(pages, start=1):
-        off = 0
-        for ln, t in enumerate(lines, start=1):
-            out.append(RawUnit(len(out), t, Locator(page=pno, line=ln, char_start=off,
-                                                    char_end=off + len(t))))
-            off += len(t) + 1
-    return out
 
 
 def codes(issues):

@@ -4,7 +4,7 @@ import time
 from lai.ingest.checks import run_checks
 from lai.ingest.model import AnswerKeyEntry, Locator, ParsedItem, ParsedOption
 from lai.ingest.textparse import parse_text_units
-from test_textparse import U
+from ingest_helpers import U
 
 
 def item(seq, number, text, opts="ABCDE"):

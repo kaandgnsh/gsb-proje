@@ -91,16 +91,26 @@ def _furniture(units: list[RawUnit]) -> set[int]:
     pages = {u.locator.page for u in units if u.locator.page is not None}
     if len(pages) < 3:
         return set()
+    # Yalnız sayfanın en üst/en alt iki satırı aday olabilir (gövdede tekrarlanan içerik silinmez)
+    by_page: dict[int, list[RawUnit]] = {}
+    for u in units:
+        if u.locator.page is not None:
+            by_page.setdefault(u.locator.page, []).append(u)
+    edge: set[int] = set()
+    for us in by_page.values():
+        us = sorted(us, key=lambda x: (x.locator.bbox[1] if x.locator.bbox else 0, x.index))
+        edge |= {x.index for x in us[:2] + us[-2:]}
     seen: dict[str, set[int]] = {}
     for u in units:
         t = u.text.strip()
-        if u.locator.page is None or _is_item(t) or _OPT.match(t) or _key_tokens(t):
+        if (u.index not in edge or u.locator.page is None or _is_item(t) or _OPT.match(t)
+                or _key_tokens(t)):
             continue
         seen.setdefault(re.sub(r"\d+", "#", tr_lower(t)), set()).add(u.locator.page)
     limit = max(3, math.ceil(len(pages) * 0.5))
     keys = {k for k, ps in seen.items() if len(ps) >= limit}
     return {u.index for u in units
-            if u.locator.page is not None and re.sub(r"\d+", "#", tr_lower(u.text.strip())) in keys}
+            if u.index in edge and re.sub(r"\d+", "#", tr_lower(u.text.strip())) in keys}
 
 
 def parse_text_units(units: list[RawUnit]):

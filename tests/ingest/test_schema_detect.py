@@ -4,6 +4,7 @@ import sqlite3
 import zipfile
 
 import pytest
+pytest_plugins = ["ingest_helpers"]
 
 from lai.ingest.detect import detect_kind, sha256_file
 from lai.ingest.model import IngestError, Locator
