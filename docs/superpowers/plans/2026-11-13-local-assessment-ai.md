@@ -304,3 +304,59 @@ Zorunlu kısıtlar:
 5. **profiles + participants + assessments** — test: yayımlanan sürüm sonraki bilgi değişikliğinden etkilenmez (hash ve içerik aynı); yeni sürüm yeni satır; anonim katılımcı (yalnız kod); eksik yanıt `None`; değerlendirme kaydı değişmez, yeni profil sürümüyle yeniden hesap yeni satır (`recalculated_from`), eskisi aynen.
 6. **backup/restore** — test: yedek bütünlüğü + sha256 + sürüm; bozuk yedek reddedilir ve hedef değişmez; geri yükleme öncesi güvenlik yedeği; göç öncesi otomatik yedek; WAL'deki işlenmiş veri yedekte var.
 7. **kurulum adımı + CLI + sentetik ölçek** — test: `install` DB'yi kurar, ikinci kez ATLANDI; `doctor` salt okunur (dosya mtime değişmez); `db backup/restore/status`; `uninstall` DB ve yedekleri korur; 400 madde + 200 katılımcı × 400 yanıt yükleme < 10 sn ve bütünlük denetimi `ok`.
+
+---
+
+## M4 — Belge içe aktarma ve soru çıkarımı
+
+Kullanıcı kuralları (2026-11-14): PDF/DOCX/XLSX/CSV/JSON; ~400 soru; soru ve seçenekleri doğru ayır; numara ve özgün sıra korunur; kaynak dosya + sayfa + konum; soru–seçenek ve cevap anahtarı eşleşmesi korunur; yinelenen soru tespiti; eksik/bozuk/belirsiz kayıt işaretlenir; içerik **sessizce değiştirilmez, eksik veri tahminle doldurulmaz**; ham içerik ve ayrıştırılmış veri ayrı saklanır; aynı belge tekrar → mükerrer kayıt yok; anlaşılır hata raporu; her kayıt kaynağa izlenebilir. Puanlama algoritması tahmin edilmez; cevap anahtarı **yorumlanmadan** ham değer olarak saklanır (bilgi kaydı/kural üretilmez — M5). Ayrıştırma tamamen deterministik; AI yok. Yalnız sentetik belgeler.
+
+**Mimari:** `src/lai/ingest/` (Qt/AI importu yok). Akış: `detect_kind` (uzantı + sihirli bayt) → okuyucu → `RawUnit` listesi (ham metin + konum) → ayrıştırıcı (`textparse` serbest metin; `tabular` tablo; `jsonfmt` JSON şeması) → `checks` (eksik/bozuk/belirsiz/yinelenen) → `ParseResult` → `service.import_document` (DB: ham birimler, ayrıştırılmış kayıtlar, sorunlar; hata yoksa yeni envanter sürümü + madde/seçenek + kanıt).
+
+### Dosyalar
+
+```
+src/lai/store/migrations/0003_ingest.sql   # document_raw_units, import_runs, parsed_items, parsed_options,
+                                           # parsed_answer_keys, import_issues; evidence_refs.locator;
+                                           # options.evidence_id; inventory_versions.source_run_id/content_hash;
+                                           # items/options değişmez
+src/lai/ingest/__init__.py
+src/lai/ingest/model.py      # Locator, RawUnit, ParsedOption, ParsedItem, AnswerKeyEntry, Issue, ParseResult, IngestError
+src/lai/ingest/detect.py     # detect_kind, sha256_file (akışlı), MAX_BYTES
+src/lai/ingest/readers.py    # read_pdf, read_docx, read_xlsx, read_csv, read_json (→ RawUnit / satırlar)
+src/lai/ingest/textparse.py  # parse_text_units: madde/seçenek/satır içi seçenek/cevap anahtarı/başlık/sayfa süsü
+src/lai/ingest/tabular.py    # map_columns, parse_rows
+src/lai/ingest/jsonfmt.py    # SCHEMA (lai-inventory/1), parse_json_document
+src/lai/ingest/checks.py     # run_checks: numara boşluğu/yinelenen/sıra dışı/boş metin/bozuk karakter/seçenek tutarlılığı/anahtar
+src/lai/ingest/normalize.py  # tr_casefold, compare_key (yalnız karşılaştırma için; saklanan metin değişmez)
+src/lai/ingest/parse.py      # parse_file(path, kind=None, encoding=None) -> ParseResult
+src/lai/ingest/service.py    # import_document(store, inventory_id, path, *, documents_dir, ...) -> ImportReport
+src/lai/ingest/report.py     # format_report (Türkçe metin), report_dict (JSON)
+src/lai/ingest/__main__.py   # python -m lai.ingest parse|import
+tests/support/synthetic_docs.py  # Türkçe karakterli sentetik envanter → PDF/DOCX/XLSX/CSV/JSON (+ bozuk varyantlar)
+tests/ingest/test_*.py
+docs/milestones/M04.md
+```
+
+### Kararlar
+
+- Saklanan metin = kaynaktaki karakterler; yalnız satır sonları tek boşlukla birleştirilir (PDF/DOCX satır kaydırması). Satır sonu tirelemesi kaldırılmaz. Ham satırlar ayrıca `document_raw_units`'te birebir durur.
+- Serbest metinde seçenek kodu yalnız harf (A–J / a–j); rakamlı seçenekler madde numarasıyla karışacağından yalnız tablo/JSON'da desteklenir.
+- Satır içi seçenekler (`a) Evet b) Hayır`) yalnız `a`/`A`'dan başlayıp ardışık ilerlerse bölünür.
+- Önem: `error` → envanter sürümü oluşturulmaz (`needs_review`); `warning`/`info` → sürüm oluşur, raporda görünür.
+  - error: numara boşluğu, yinelenen numara, boş madde metni, bozuk karakter (U+FFFD/kontrol), madde içinde yinelenen seçenek kodu, diğerleri seçenekliyken seçeneksiz madde, metin katmanı olmayan PDF sayfası, anahtarda olmayan madde, aynı madde için çelişen anahtar, numarasız tablo satırı.
+  - warning: aynı metin farklı numarada, çok benzer metin (≥0,92), sıra dışı numara, seçenek sayısı farklı, seçenek harfi atlanmış, çok satırlı seçenek, cevap anahtarı eksik/seçenek dışı değer, eşlenmemiş metin satırı.
+  - info: ayrılan yönerge/başlık/sayfa süsü satırları, otomatik numara hesaplandı, hiç seçenek yok (ortak ölçek olabilir), yok sayılan sütun/sayfa.
+- Yinelenme: aynı envanterde aynı sha256 + aynı ayrıştırıcı sürümü → `duplicate` çalıştırması, yeni veri yok. Farklı dosya ama içerik hash'i son sürümle aynı → yeni sürüm açılmaz.
+- CSV: UTF-8 (BOM'lu/BOM'suz) katı; değilse açık hata + `encoding` parametresi. Ayraç `, ; \t` arasından.
+- DOCX otomatik numaralandırma `numbering.xml`'den deterministik hesaplanır (decimal, harf, roma; `start`, düzey sıfırlama); hesaplandığı info olarak raporlanır.
+- Boyut sınırı varsayılan 200 MB; sha256 akışlı; XLSX `read_only`; CSV satır satır.
+
+### Görevler (TDD)
+
+1. **Şema v3 + model + tür tespiti** — test: tablolar/sütunlar var, ayrıştırılmış tablolar ve `items/options` değişmez; uzantı–içerik uyuşmazlığı, `.doc/.xls`, boş dosya, çok büyük dosya anlaşılır `IngestError`; sha256 akışlı.
+2. **Okuyucular** — test: PDF sayfa/karakter aralığı/bbox; şifreli ve metinsiz PDF; DOCX paragraf + tablo sırası + otomatik numara; XLSX sayfa/hücre; CSV kodlama/ayraç; JSON sözdizimi hatası satır/sütunla.
+3. **Ayrıştırıcılar** — test: madde/seçenek ayrımı, satır içi seçenek, çok satırlı metin, sayfa aşan madde, başlık/sayfa süsü, cevap anahtarı; tablo başlık eşleme (Türkçe eş anlamlılar), JSON şema hataları yol bilgisiyle.
+4. **Denetimler** — her error/warning kodu için bir test; Türkçe büyük/küçük harf duyarlı yinelenme (`IŞIK` = `ışık`, `İ` = `i`).
+5. **Servis + rapor + CLI** — test: hatasız belge → sürüm + madde + seçenek + kanıt (belge, sayfa, aralık, alıntı); hatalı → `needs_review`, sürüm yok, ayrıştırılmış kayıtlar ve sorunlar saklı; aynı belge iki kez → `duplicate`; farklı biçimde aynı içerik → yeni sürüm yok; bozuk dosya → `failed` + belge kaydı + anlaşılır mesaj; özgün dosya kopyası `0400`.
+6. **Sentetik 400 + ölçek** — her biçimde 400 madde kayıpsız (metin, seçenek, sıra, Türkçe karakterler birebir); süre; bellek (tracemalloc ve alt süreç RSS); `integrity_check`.
