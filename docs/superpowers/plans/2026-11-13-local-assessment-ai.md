@@ -471,3 +471,26 @@ CSV/XLSX okuma, sütun/cevap doğrulaması, puanlama ve SQLite kaydını kapsaya
 7. Tekil/toplu motor eşitliği, kısmi/engellenmiş boyut, hata yalıtımı, crash/continue,
    çift çalışan, sürüm sabitleme, CSV/XLSX ve 400×200 toplam süre testleri.
 8. Tam regresyon ve M08 raporu; ayrı yerel commit'ler, push yok. M9'a geçme.
+
+---
+
+## M9 — Türkçe PySide6 masaüstü (2026-11-14)
+
+M8 referansı 671 teknik testtir; 16 gerçek entegrasyon ayrı raporlanır. Yalnız sentetik
+veri; kurulum, model indirme/dış servis ve mevcut Ollama/OpenCode ayarına yazma yok.
+
+1. Belge önizleme/kayıt (soru, anahtar ve yönerge), kaynak konumlu hatalar; ayrı cevap
+   anahtarını mevcut ham belge/parsed_answer_keys depolarına yazan Qt'siz servis.
+2. Türkçe gezinme, envanter seçimi, öğrenme/soru/kanıt/profil ekranı; serbest yanıt,
+   erteleme/bilmiyorum, açık kural formu ve model yorumu → açık kullanıcı onayı.
+3. Sürüm seçimiyle tekil cevap formu, kalıcı sonuç ve açılabilir hesap dökümü;
+   geçmiş ve katılımcı ekranları. M8/M7 servisleri aynen kullanılır.
+4. CSV/XLSX eşleme/satır önizlemesi, hazır iş, ilerleme, iptal/duraklatma/devam;
+   kapanış bekleyen satırı güvenli noktada bırakır. Yeni açılışta işler listelenir.
+5. QThread çalışanı, işlem başına Store; GUI iş parçacığında uzun hizmet çağrısı yok.
+   Qt yalnız `lai.ui` içinde; yerel model durumu mevcut loopback bağdaştırıcısından.
+6. Türkçe dosya seçiciler, klavye kısayolları, açık durumlar ve yerel UI tercihleri.
+   Kurulum yapmadan üretilebilen taşınabilir başlatma/kısayol dosyası.
+7. QtTest/offscreen sentetik uçtan uca, kes/kapat/aç/devam, CLI eşitliği, model yokluğu,
+   duyarlılık ve katman testleri; mümkünse yerel Linux oturumunda otomatik duman denemesi.
+8. Tam takım + M09 raporu + ayrı yerel commit'ler; PDF/rapor dışa aktarma M10'da kalır.
