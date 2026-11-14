@@ -360,3 +360,60 @@ docs/milestones/M04.md
 4. **Denetimler** — her error/warning kodu için bir test; Türkçe büyük/küçük harf duyarlı yinelenme (`IŞIK` = `ışık`, `İ` = `i`).
 5. **Servis + rapor + CLI** — test: hatasız belge → sürüm + madde + seçenek + kanıt (belge, sayfa, aralık, alıntı); hatalı → `needs_review`, sürüm yok, ayrıştırılmış kayıtlar ve sorunlar saklı; aynı belge iki kez → `duplicate`; farklı biçimde aynı içerik → yeni sürüm yok; bozuk dosya → `failed` + belge kaydı + anlaşılır mesaj; özgün dosya kopyası `0400`.
 6. **Sentetik 400 + ölçek** — her biçimde 400 madde kayıpsız (metin, seçenek, sıra, Türkçe karakterler birebir); süre; bellek (tracemalloc ve alt süreç RSS); `integrity_check`.
+
+---
+
+## M5 — Puanlama kuralı keşfi
+
+Kullanıcı onayı: 2026-11-14 ("devam"). Kurallar M4 ile aynı: yalnız sentetik belge, model indirme yok, mevcut Ollama'ya dokunma yok, dış servis yok; testler sahte LLM ile. Puanlama algoritması **tahmin edilmez**: LLM yalnız belgede açıkça yazan kuralları **aday** olarak önerir; her aday sabit kural kataloğunun katı şemasıyla ve belgede birebir bulunan alıntıyla doğrulanır; durum deterministik olarak atanır. Hiçbir aday CONFIRMED olmaz (M6'da kullanıcı onaylar).
+
+**Mimari:** `lai.core.rules` (kural kataloğu + gövde şemaları + anahtar; saf), `lai.core.tally` (boyut modeli + puan sayımı + karar; saf — M7 bunun üstüne kurulur), `lai.ai` (LLM protokolü, Ollama bağdaştırıcısı, Türkçe istem + çıktı şeması), `lai.learning` (`corpus` belge metni/parçalama/alıntı bulma, `examples` örnek sonuç içe aktarma, `fit` örnek uyumu, `discovery` akış, `__main__` CLI). Başvuru belgeleri (puanlama yönergesi gibi madde içermeyen belgeler) `lai.ingest.service.import_reference_document` ile ham metin olarak saklanır.
+
+### Kural kataloğu (v1)
+
+| Tür | Gövde | Anahtar |
+|---|---|---|
+| `dimension_def` | `{dimension, poles:[p1,p2]}` | `rule:dimension_def:dim:D` |
+| `dimension_items` | `{dimension, items:[n…]}` | `rule:dimension_items:dim:D` |
+| `default_option_map` | `{dimension, options:{kod:kutup}}` | `rule:default_option_map:dim:D` |
+| `item_pole_map` | `{item, dimension, options:{kod:kutup}}` | `rule:item_pole_map:item:N:dim:D` |
+| `option_weight` | `{item, dimension, weights:{kod:{kutup:puan}}}` | `rule:option_weight:item:N:dim:D` |
+| `reverse` | `{item, dimension}` | `rule:reverse:item:N:dim:D` |
+| `threshold` | `{dimension, method:"higher_wins"}` ya da `{dimension, method:"min_points", pole, value}` | `rule:threshold:dim:D` |
+| `tie_break` | `{dimension, pole}` | `rule:tie_break:dim:D` |
+| `missing_answer_policy` | `{dimension ("*" = tümü), policy: skip\|count_as_pole\|invalidate, pole?}` | `rule:missing_answer_policy:dim:D` |
+| `normalization` | `{dimension, method: percentage\|scaled\|other, parameters:{}}` | `rule:normalization:dim:D` (M5'te sınanmaz) |
+
+Katalog dışı tür → red. Bilgi kaydı içeriği: `{"body": …, "explanation": …}`; çelişen öneri varsa `"alternatives": […]`, `"conflict": true`.
+
+### Durum atama (deterministik)
+
+- Şema geçersiz / katalog dışı / alıntı belgede yok / alıntı < 8 karakter / madde ya da seçenek envanterde yok / kutup boyutta yok → aday **reddedilir** (bilgi kaydı yok; `discovery_candidates`'ta gerekçesiyle saklanır).
+- Aynı anahtar için farklı gövdeler (aynı çalıştırmada) → CONTRADICTORY (`conflict`), uyum testine girmez.
+- Kullanıcı onaylı (CONFIRMED) ya da reddedilmiş kayıtla çelişen aday → yazılmaz (`conflicts_confirmed` / `previously_rejected`).
+- Örnek uyumu: tutarlı → STRONGLY_INFERRED (`example_fit`); tutarsız → CONTRADICTORY (`example_fit`); sınanamaz → WEAKLY_INFERRED (`ai_inference`).
+- Uyum testi: (a) karar kuralları (`threshold`, `tie_break`) örnekte bildirilen puanlara uygulanıp harfle karşılaştırılır; (b) puan kümesi (üyelik + eşlemeler + ters + ağırlık + eksik cevap politikası) bildirilen puanlarla, puan yoksa ve karar kuralı tutarsız değilse harfle karşılaştırılır; (c) `dimension_def` örnek harfleri/puan anahtarları kutuplarda mı. Bir kural katıldığı testlerden biri tutarsızsa tutarsız; en az biri tutarlıysa tutarlı; hiç sınanmadıysa sınanamaz. Kümede tutarsızlık varsa kümedeki tüm katılımcı kurallar CONTRADICTORY olur (hangi kuralın hatalı olduğu tahmin edilmez).
+- Öncelik (puan hesabı): `option_weight` > `item_pole_map` > `default_option_map` (± `reverse`). Eksik eşleme → model eksik → sınanamaz (eksikler ayrıntıda listelenir).
+
+### Şema v4 (`0004_discovery.sql`)
+
+`reference_documents`, `example_sets`, `example_results`, `discovery_runs` (yalnız `running` → son durum güncellenebilir), `discovery_chunks` (istem sha256, ham çıktı, düşünme metni), `discovery_candidates`, `fit_runs`, `fit_results`; hepsi (çalıştırma durum geçişi dışında) değiştirilemez; denetim kaydı tetikleyicileri.
+
+### Arayüzler
+
+- `lai.core.rules`: `RULE_TYPES`, `RuleError(code, message)`, `validate_rule(rule_type, body) -> list[str]`, `rule_key(rule_type, body) -> str`, `rule_dimension(body) -> str`, `canonical(body) -> str`.
+- `lai.core.tally`: `build_model(dimension, rules: list[tuple[key, type, body]]) -> DimensionModel` (`.missing: list[str]`, `.used: set[key]`), `score(model, answers: dict[int, str|None]) -> Tally(points, letter, status, note, used)`, `decide(rules_for_dim, points) -> (letter|None, used_keys)`.
+- `lai.ai.llm`: `LLMReply(text, thinking, eval_count, duration_ms)`, `LLM` Protocol `complete(*, system, prompt, schema) -> LLMReply` + `.model: str`; `OllamaLLM(base_url, model, *, think=True, timeout)` (loopback istemcisi, `temperature 0`, `seed 0`); `lai.ai.prompts`: `PROMPT_VERSION`, `DISCOVERY_SYSTEM`, `discovery_prompt(chunk_text, context) -> str`, `OUTPUT_SCHEMA`.
+- `lai.learning.corpus`: `Corpus.for_document(store, document_id)`, `.text`, `.chunks(max_chars)`, `.find(quote) -> QuoteHit|None` (boşluk dizileri tek boşluk sayılır, başka normalleştirme yok), `QuoteHit.evidence_fields()`.
+- `lai.learning.examples`: `parse_examples(data) -> list[Example]` (`lai-examples` v1), `import_examples(store, inventory_id, path, *, documents_dir) -> ExampleImport`.
+- `lai.learning.fit`: `run_fit(store, inventory_id, *, discovery_run_id=None) -> FitReport` (güncel, onaylanmamış, reddedilmemiş kural kayıtlarını yeniden değerlendirir; değişen durum = yeni sürüm).
+- `lai.learning.discovery`: `discover_rules(store, inventory_id, llm, *, document_ids=None, max_chars=6000) -> DiscoveryReport`.
+- CLI: `python -m lai.learning reference|examples|discover|fit|rules`.
+
+### Görevler (TDD)
+
+1. **Şema v4 + kural kataloğu** — test: tablolar; değişmezlik; çalıştırma yalnız `running`'den çıkar; her türün geçerli/geçersiz gövdesi; anahtar kararlı; katalog dışı tür.
+2. **Başvuru belgesi + derlem + alıntı** — test: kılavuz PDF/DOCX ham metin olarak saklanır, ikinci kez yinelenmez; alıntı satır sonu/çoklu boşluk farkıyla bulunur, harf farkıyla bulunmaz; kanıt sayfa + sayfa içi aralık + belgedeki birebir metin; tablo satırları hücre metniyle; parçalar tüm metni örter.
+3. **Örnekler + puan sayımı + uyum** — test: `lai-examples` şema hataları yol bilgisiyle; tutarlı küme → STRONGLY_INFERRED; tek ters madde hatalı → küme CONTRADICTORY; puansız harfli örnek + eşik; berabere + tie_break; eksik cevap politikası; eksik eşleme → sınanamaz; örnek yok → WEAKLY_INFERRED.
+4. **AI katmanı + keşif** — test (sahte LLM): alıntısı belgede olmayan öneri reddedilir; katalog dışı / şema dışı / olmayan madde reddedilir; aynı öneri iki parçadan → tek kayıt, iki kanıt; çelişen öneri → CONTRADICTORY; onaylı kayıtla çelişen öneri yazılmaz; ikinci çalıştırma yeni sürüm üretmez; LLM ulaşılamaz → çalıştırma `failed`, bilgi yazılmaz; bozuk JSON → parça `invalid_output`; istem enjeksiyonu metni veri olarak kalır; hiçbir aday CONFIRMED değil.
+5. **CLI + ölçek + belge** — test: sahte Ollama sunucusuyla uçtan uca `discover`; 11434 reddedilir; 400 maddelik envanter + kılavuz + 50 örnek → süre ve doğruluk; `docs/milestones/M05.md`.
