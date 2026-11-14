@@ -196,3 +196,40 @@ def test_windows_job_object_kills_children_on_close():
     ops.attach_job(proc_handle=55)
     assert k.calls[:3] == ["CreateJobObjectW", "SetInformationJobObject", "AssignProcessToJobObject"]
     assert ops.last_job_flags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+
+
+def test_port_change_never_orphans_owned_process(paths, fake_binary):
+    a_mgr = RuntimeManager(RuntimeConfig(port=free_port()), paths, binary=str(fake_binary))
+    a = a_mgr.start(timeout=15)
+    b_mgr = RuntimeManager(RuntimeConfig(port=free_port()), paths, binary=str(fake_binary))
+    b = b_mgr.start(timeout=15)
+    try:
+        assert b.pid != a.pid
+        assert _wait_dead(a.pid), "eski sahipli süreç sahipsiz bırakıldı"
+        assert not port_in_use("127.0.0.1", a_mgr.cfg.port)
+    finally:
+        b_mgr.stop()
+        if _alive(a.pid):
+            os.kill(a.pid, signal.SIGKILL)
+
+
+def test_failed_terminate_keeps_record(mgr, monkeypatch):
+    st = mgr.start(timeout=15)
+    monkeypatch.setattr(mgr.ops, "terminate", lambda pid, timeout: None)  # ör. EPERM
+    assert mgr.stop(timeout=0.5) is False
+    assert mgr.record_file.exists(), "süreç yaşarken sahiplik kaydı silindi"
+    monkeypatch.undo()
+    assert mgr.stop() is True
+    assert _wait_dead(st.pid)
+
+
+def test_start_refuses_when_previous_owned_process_cannot_be_stopped(paths, fake_binary, monkeypatch):
+    a_mgr = RuntimeManager(RuntimeConfig(port=free_port()), paths, binary=str(fake_binary))
+    a = a_mgr.start(timeout=15)
+    b_mgr = RuntimeManager(RuntimeConfig(port=free_port()), paths, binary=str(fake_binary))
+    monkeypatch.setattr(b_mgr.ops, "terminate", lambda pid, timeout: None)
+    with pytest.raises(RuntimeStartError, match="kapatılamadı"):
+        b_mgr.start(timeout=5)
+    assert json.loads(a_mgr.record_file.read_text())["pid"] == a.pid
+    assert not port_in_use("127.0.0.1", b_mgr.cfg.port)
+    assert a_mgr.stop() is True

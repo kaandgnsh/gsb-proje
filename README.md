@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1 ve M2 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -33,3 +33,16 @@ Ollama varsa ona **dokunulmaz**; uygulama kendi Ollama sürecini `127.0.0.1:1143
 uv venv -p 3.14 .venv && uv pip install --python .venv -r requirements/app.txt pytest
 .venv/bin/pytest
 ```
+
+## Yapay zekâ modeli
+
+```bash
+python -m lai_setup model pull --online                 # qwen3.5:4b indir (açık izin)
+python -m lai_setup model import --from model.gguf      # çevrimdışı .gguf
+python -m lai_setup model import --from /baska/ollama --name model:tag   # başka depodan, salt okunur
+python -m lai_setup model verify                         # modeli çalıştırarak doğrula
+python -m lai_setup runtime status                       # uygulamanın Ollama süreci
+```
+(Komutlar depo kökünde `PYTHONPATH=src` ile çalıştırılır.)
+
+Gerçek entegrasyon testleri: `.venv/bin/pytest -m integration tests/integration -v -s`

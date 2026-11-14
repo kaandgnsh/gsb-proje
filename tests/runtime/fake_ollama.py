@@ -125,7 +125,11 @@ def main():
                 if name not in reg:
                     return self._send(404, {"error": f"model '{req.get('model')}' not found"})
                 prompt = req.get("prompt", "")
-                if "BOZUK_JSON" in prompt:
+                if "THINK_LEAK" in prompt:
+                    body = (json.dumps(_instance(req["format"])) if isinstance(req.get("format"), dict)
+                            else "4")
+                    text = "Thinking Process:\n1. say\u0131lar...\n</think>\n\n" + body
+                elif "BOZUK_JSON" in prompt:
                     text = '{"eksik": '
                 elif "SEMA_DISI" in prompt:
                     text = json.dumps({"beklenmeyen": 1})

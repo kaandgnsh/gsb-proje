@@ -102,10 +102,14 @@ class RuntimeManager:
 
     def start(self, timeout: float = 60) -> RuntimeStatus:
         rec = self._load()
-        if self._owned(rec) and rec.get("port") == self.cfg.port:
-            st = self.status()
-            if st.version:
-                return st
+        if self._owned(rec):
+            if rec.get("port") == self.cfg.port and self.status().version:
+                return self.status()
+            # bizim sürecimiz ama başka portta ya da yanıt vermiyor: sahipsiz bırakmadan kapat
+            if not self.stop():
+                raise RuntimeStartError(
+                    f"uygulamanın önceki Ollama süreci (pid {rec['pid']}) kapatılamadı; "
+                    "yeni süreç başlatılmadı")
         elif rec:
             self._clear()  # bayat ya da yabancı kayıt: sürece dokunmadan sil
 
@@ -151,7 +155,12 @@ class RuntimeManager:
         if not self._owned(rec):
             self._clear()
             return False
-        self.ops.terminate(rec["pid"], timeout)
+        try:
+            self.ops.terminate(rec["pid"], timeout)
+        except PermissionError:
+            pass
+        if self.ops.alive(rec["pid"]):
+            return False  # kapatılamadı: kayıt korunur, süreç sahipsiz bırakılmaz
         if self._proc is not None and self._proc.pid == rec["pid"]:
             try:
                 self._proc.wait(timeout=5)

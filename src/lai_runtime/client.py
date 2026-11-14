@@ -37,6 +37,15 @@ class GenerateResult:
     data: object | None
     eval_count: int
     total_duration_ns: int
+    thinking: str = ""
+
+
+def split_thinking(text: str) -> tuple[str, str]:
+    """Şablonu düşünmeyi ayırmayan modellerde yanıta karışan '...</think>' bölümünü ayırır."""
+    if "</think>" not in text:
+        return "", text
+    thought, _, answer = text.rpartition("</think>")
+    return thought.replace("<think>", "").strip(), answer.strip()
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -133,7 +142,8 @@ class OllamaClient:
         if keep_alive is not None:
             body["keep_alive"] = keep_alive
         r = self._request("POST", "/api/generate", body)
-        text = r.get("response", "")
+        leaked, text = split_thinking(r.get("response", ""))
+        thinking = (r.get("thinking") or "") + leaked
         data = None
         if schema is not None:
             try:
@@ -143,7 +153,8 @@ class OllamaClient:
             errs = validate(data, schema)
             if errs:
                 raise StructuredOutputError("JSON şemaya uymuyor: " + "; ".join(errs), text)
-        return GenerateResult(text, data, int(r.get("eval_count", 0)), int(r.get("total_duration", 0)))
+        return GenerateResult(text, data, int(r.get("eval_count", 0)),
+                              int(r.get("total_duration", 0)), thinking)
 
     def pull(self, model: str, on_progress: Callable[[dict], None] | None = None) -> dict:
         return self._stream("/api/pull", {"model": model, "stream": True}, on_progress)

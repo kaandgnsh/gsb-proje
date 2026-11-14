@@ -89,3 +89,18 @@ def test_pull_reports_progress(fake_server):
     OllamaClient(base).pull("qwen3.5:4b", on_progress=seen.append)
     assert seen[-1]["status"] == "success"
     assert any(e.get("completed") == 50 for e in seen)
+
+
+def test_leaked_thinking_is_separated(fake_server):
+    base, _, register = fake_server
+    register("m:latest")
+    r = OllamaClient(base).generate("m", "THINK_LEAK kaç kelime?")
+    assert r.text == "4"
+    assert "Thinking Process" in r.thinking
+
+
+def test_leaked_thinking_does_not_break_structured_output(fake_server):
+    base, _, register = fake_server
+    register("m:latest")
+    r = OllamaClient(base).generate("m", "THINK_LEAK", schema=SCHEMA)
+    assert r.data == {"boyut": "E-I", "madde": 1}
