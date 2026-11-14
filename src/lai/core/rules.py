@@ -1,0 +1,127 @@
+"""Puanlama kuralı kataloğu (v1): sabit tür kümesi, her tür için katı gövde şeması.
+
+Kurallar veri olarak saklanır ve yalnız bu katalogdaki türler için yazılmış Python kodu
+tarafından yorumlanır (DSL ya da kod çalıştırma yok). Katalog dışı tür reddedilir.
+"""
+from __future__ import annotations
+
+import json
+
+from lai_runtime.jsonschema_lite import validate
+
+CATALOG_VERSION = 1
+
+_DIM = {"type": "string", "minLength": 1, "maxLength": 20}
+_POLE = {"type": "string", "minLength": 1, "maxLength": 10}
+_ITEM = {"type": "integer", "minimum": 1, "maximum": 100000}
+_CODE_MAP = {"type": "object"}  # kod → kutup; anahtarlar kodda denetlenir
+
+
+def _obj(required, **props):
+    return {"type": "object", "additionalProperties": False, "required": list(required),
+            "properties": props}
+
+
+SCHEMAS: dict[str, dict] = {
+    "dimension_def": _obj(("dimension", "poles"), dimension=_DIM,
+                          poles={"type": "array", "items": _POLE, "minItems": 2, "maxItems": 2}),
+    "dimension_items": _obj(("dimension", "items"), dimension=_DIM,
+                            items={"type": "array", "items": _ITEM, "minItems": 1,
+                                   "maxItems": 100000}),
+    "default_option_map": _obj(("dimension", "options"), dimension=_DIM, options=_CODE_MAP),
+    "item_pole_map": _obj(("item", "dimension", "options"), item=_ITEM, dimension=_DIM,
+                          options=_CODE_MAP),
+    "option_weight": _obj(("item", "dimension", "weights"), item=_ITEM, dimension=_DIM,
+                          weights={"type": "object"}),
+    "reverse": _obj(("item", "dimension"), item=_ITEM, dimension=_DIM),
+    "threshold": _obj(("dimension", "method"), dimension=_DIM,
+                      method={"type": "string", "enum": ["higher_wins", "min_points"]},
+                      pole=_POLE, value={"type": "number", "minimum": 0}),
+    "tie_break": _obj(("dimension", "pole"), dimension=_DIM, pole=_POLE),
+    "missing_answer_policy": _obj(("dimension", "policy"), dimension=_DIM,
+                                  policy={"type": "string",
+                                          "enum": ["skip", "count_as_pole", "invalidate"]},
+                                  pole=_POLE),
+    "normalization": _obj(("dimension", "method", "parameters"), dimension=_DIM,
+                          method={"type": "string", "enum": ["percentage", "scaled", "other"]},
+                          parameters={"type": "object"}),
+}
+RULE_TYPES = tuple(SCHEMAS)
+
+# Madde düzeyinde olan türler (anahtar madde numarası içerir)
+ITEM_TYPES = ("item_pole_map", "option_weight", "reverse")
+
+
+def _code_ok(code: str) -> bool:
+    return isinstance(code, str) and 1 <= len(code) <= 5 and code.strip() == code
+
+
+def _extra(rule_type: str, body: dict) -> list[str]:
+    errs: list[str] = []
+    if rule_type == "dimension_def" and len(set(body["poles"])) != 2:
+        errs.append("$.poles: iki kutup birbirinden farklı olmalı")
+    if rule_type == "dimension_items" and len(set(body["items"])) != len(body["items"]):
+        errs.append("$.items: yinelenen madde numarası")
+    if rule_type in ("default_option_map", "item_pole_map"):
+        opts = body["options"]
+        if not opts:
+            errs.append("$.options: boş olamaz")
+        for k, v in opts.items():
+            if not _code_ok(k):
+                errs.append(f"$.options.{k}: geçersiz seçenek kodu")
+            errs += validate(v, _POLE, f"$.options.{k}")
+    if rule_type == "option_weight":
+        w = body["weights"]
+        if not w:
+            errs.append("$.weights: boş olamaz")
+        for k, poles in w.items():
+            if not _code_ok(k):
+                errs.append(f"$.weights.{k}: geçersiz seçenek kodu")
+            if not isinstance(poles, dict) or not poles:
+                errs.append(f"$.weights.{k}: kutup → puan nesnesi olmalı")
+                continue
+            for p, pts in poles.items():
+                errs += validate(p, _POLE, f"$.weights.{k}.<kutup>")
+                errs += validate(pts, {"type": "number", "minimum": -1000, "maximum": 1000},
+                                 f"$.weights.{k}.{p}")
+    if rule_type == "threshold":
+        if body["method"] == "min_points":
+            for f in ("pole", "value"):
+                if f not in body:
+                    errs.append(f"$.{f}: 'min_points' yönteminde zorunlu")
+        else:
+            for f in ("pole", "value"):
+                if f in body:
+                    errs.append(f"$.{f}: 'higher_wins' yönteminde kullanılmaz")
+    if rule_type == "missing_answer_policy":
+        if body["policy"] == "count_as_pole" and "pole" not in body:
+            errs.append("$.pole: 'count_as_pole' politikasında zorunlu")
+        if body["policy"] != "count_as_pole" and "pole" in body:
+            errs.append("$.pole: yalnız 'count_as_pole' politikasında kullanılır")
+    return errs
+
+
+def validate_rule(rule_type: str, body) -> list[str]:
+    """Hata listesi (boş = geçerli). Mesajlar Türkçe ve JSON yolu içerir."""
+    if rule_type not in SCHEMAS:
+        return [f"'{rule_type}' kural kataloğunda yok (izinli türler: {', '.join(RULE_TYPES)})"]
+    errs = validate(body, SCHEMAS[rule_type])
+    return errs or _extra(rule_type, body)
+
+
+def rule_dimension(body: dict) -> str:
+    return body["dimension"]
+
+
+def rule_key(rule_type: str, body: dict) -> str:
+    if rule_type in ITEM_TYPES:
+        return f"rule:{rule_type}:item:{body['item']}:dim:{body['dimension']}"
+    return f"rule:{rule_type}:dim:{body['dimension']}"
+
+
+def canonical(rule_type: str, body: dict) -> str:
+    """Anlamca aynı iki gövde için aynı metin (anahtar sırası ve madde listesi sırası önemsiz)."""
+    b = dict(body)
+    if rule_type == "dimension_items":
+        b["items"] = sorted(b["items"])
+    return json.dumps(b, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
