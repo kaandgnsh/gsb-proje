@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1–M7 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1–M8 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -158,3 +158,79 @@ ekler. Normalizasyon yalnız açık `none`, `percentage` (pozitif payda) veya `s
 çalıştırılmaz. M6 açıklamalarından sayısal kural tahmin edilmez.
 
 Ayrıntılı semantik, kabul testleri ve ölçüm: [M7 raporu](docs/milestones/M07.md).
+
+
+## Tekil ve toplu değerlendirme (M8)
+
+Mevcut CLI kullanılır (`PYTHONPATH=src`; kurulu pakette gerekmez). Sınav ve profil
+sürümleri açıkça seçilir; katılımcı kodu veya takma ad yeterlidir. Ad, e-posta ve
+telefon isteğe bağlıdır. Aşağıdaki kimlik ve cevaplar sentetiktir:
+
+```bash
+python -m lai.learning assess --db /veri/lai.db --inventory-version 1 --profile-version 1 --alias "Sentetik Deniz" --responses '[[1,"A"],[2,null]]' --json
+python -m lai.learning assess --db /veri/lai.db --inventory-version 1 --profile-version 1 --participant-code SYN-001 --answers cevaplar.json
+python -m lai.learning result --db /veri/lai.db --assessment 1 --json
+python -m lai.learning rescore --db /veri/lai.db --assessment 1 --profile-version 2
+```
+
+`--answers` JSON çiftler listesi içerir; sözlüğe çevrilmeden yinelenen cevaplar
+kontrol edilir. `result` kaydedilmiş puanları, kısmi sonuçları ve tam M7 hesap dökümünü
+gösterir. Yeni hesap önceki sonucu değiştirmez; `recalculated_from` bağlantısı saklanır.
+
+CSV (UTF-8/BOM; virgül, noktalı virgül veya sekme) ve XLSX ilk satırda başlık ister:
+
+```csv
+participant_id,alias,Q1,Q2
+SYN-001,Sentetik Deniz,A,
+SYN-002,Sentetik Ece,B,A
+```
+
+Soru başlıkları `Q1`, `Soru 1`, `S1` veya `1` olabilir; envanterdeki bütün sorular
+tekil eşlenmelidir. Yalnız `alias` sütunu da kullanılabilir. Boş hücre M7'nin eksik
+cevap politikasına gider. Seçeneklerin harf büyüklüğü değiştirilmez; dış boşluklar
+kaldırılır. Kimlikler NFC ve dış boşluk temizliğiyle, büyük/küçük harfe duyarlı eşleşir.
+Numarasal kimliklerde baştaki sıfırları korumak için hücreleri metin olarak saklayın.
+
+```bash
+python -m lai.learning batch --db /veri/lai.db --inventory-version 1 --profile-version 1 yanitlar.csv --prepare-only --json
+python -m lai.learning batch --db /veri/lai.db --inventory-version 1 --profile-version 1 yanitlar.xlsx --sheet "Yanıtlar" --json
+python -m lai.learning job list --db /veri/lai.db
+python -m lai.learning job status --db /veri/lai.db --id 1 --json
+python -m lai.learning job run --db /veri/lai.db --id 1 --limit 25
+python -m lai.learning job pause --db /veri/lai.db --id 1
+python -m lai.learning job cancel --db /veri/lai.db --id 1
+python -m lai.learning job run --db /veri/lai.db --id 1
+python -m lai.learning job clone --db /veri/lai.db --id 1 --profile-version 2
+```
+
+`--prepare-only` sütunları ve satırları doğrular, işi hazırlar; katılımcı/cevap/sonuç
+kaydını henüz oluşturmaz. Belirsiz başlık bütün dosyayı reddeder. Hatalı satırlar
+kaynak konumuyla başarısız tutulur; geçerli katılımcılar işlenir. `--mapping esleme.json`
+ile özel başlıklar açıkça eşlenebilir:
+
+```json
+{"participant_code":"Kimlik","alias":"Takma Ad","questions":{"1":"Yanıt 1","2":"Yanıt 2"}}
+```
+
+Açık eşlemede dışarıda bırakılan sütunlar `column_mapping.ignored` içinde görünür.
+XLSX formülleri cevap/kimlik olarak çalıştırılmaz. Dosya sınırları: 50 MiB, 10000 veri
+satırı/katılımcı ve 4096 sütun; XLSX açılmış içerik bütçesi 200 MiB.
+
+İş başında dosya özeti, doğrulanmış cevaplar, envanter/profil/motor sürümleri kalıcıdır.
+`job run` ertelenmiş, iptal edilmiş veya süreç kesintisinde `running` kalmış işi aynı
+girdilerle devam ettirir; kaynak dosyanın yerinde olması gerekmez. Her katılımcı ve
+checkpoint aynı SQLite işlemindedir. Tamamlanmış satırlar yeniden işlenmez.
+`--limit` verilen sayıda katılımcıdan sonra güvenle duraklatır. Motor sürümü değişmişse
+aynı işe sessizce devam edilmez. Yeni profil için `clone` ayrı, hazır bir iş oluşturur;
+sonra yeni kimlikle `job run` çağrılır. Önceki değerlendirme bağlantıları korunur.
+
+Başarılı, kısmi, başarısız ve bekleyen sayıları hem CLI hem JSON'da gösterilir. Geçici
+ve tamamen engellenmiş fakat gerekçesi kaydedilmiş M7 sonuçları `partial` sayılır;
+bu boyutlara varsayılan puan verilmez. Başarısız satır aynı işte tekrar denenmez;
+düzeltilmiş dosya veya yeni iş gerekir. Depo/sistem hatasında aktif katılımcı geri alınır
+ve iş duraklatılır.
+
+Çıkışlar: 0 işlem/kayıt başarılı (kısmi sonuç olabilir), 1 işte başarısız satır var,
+2 girdi/kullanım hatası, 130 kesinti. Toplu işin satır özeti sonuç kimliği, profil,
+güven durumu ve sınırlamaları gösterir; tam döküm `result` komutuyla okunur.
+Uçtan uca süre ölçümleri ve testler: [M8 raporu](docs/milestones/M08.md).
