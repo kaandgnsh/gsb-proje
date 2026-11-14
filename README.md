@@ -291,4 +291,19 @@ başlatıcı dosyası yazar; sistem/masaüstüne kendiliğinden kurulum yapmaz.
 
 Doğrulanan ortam: Linux x86_64, Qt **offscreen** testleri ve gerçek **Wayland** oturumu.
 Ölçüm, testler, ekran görüntüleri ve sınırlamalar: [M9 raporu](docs/milestones/M09.md).
-PDF ve biçimlendirilmiş rapor dışa aktarmaları M10 kapsamındadır.
+
+### Yerel raporlar (M10)
+
+Tekil sonuçta PDF/XLSX/CSV/JSON, Geçmiş'te seçilen kaydı dışa aktarma ve Toplu
+İşler'de CSV/XLSX veya tekil PDFleri içeren ZIP kullanılabilir. **Dosyayı aç** PDF
+ve Excel'i uygulama içinde salt okunur gösterir. Model gerekmez; raporlar eski
+kaydın kendi sürüm ve hesap dökümünden üretilir. Eksik puana sıfır atanmaz.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m lai.learning export --db /veri/lai.db --id 12 --format pdf --output /veri/sonuc.pdf
+PYTHONPATH=src .venv/bin/python -m lai.learning export-job --db /veri/lai.db --id 3 --format xlsx --output /veri/toplu.xlsx
+PYTHONPATH=src .venv/bin/python -m lai.learning export-job --db /veri/lai.db --id 3 --format pdf --output /veri/pdfler.zip
+```
+
+Biçimler, diğer CLI örnekleri, hassasiyet/atomik yazma, testler ve sınırlamalar:
+[M10 raporu](docs/milestones/M10.md).

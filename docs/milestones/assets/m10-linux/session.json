@@ -1,0 +1,22 @@
+{
+  "platform": "Linux-7.3.3-1-cachyos-x86_64-with-glibc2.44",
+  "python": "3.14.7",
+  "pyside6": "6.12.0",
+  "qt_platform": "wayland",
+  "synthetic_only": true,
+  "model_used": false,
+  "outputs": [
+    {
+      "format": "pdf",
+      "path": "/tmp/m10-wayland-final2/M10-Sentetik-Çığ.pdf",
+      "opened_in_gui": true
+    },
+    {
+      "format": "xlsx",
+      "path": "/tmp/m10-wayland-final2/M10-Sentetik-Çığ.xlsx",
+      "opened_in_gui": true
+    }
+  ],
+  "pdf_pages": 10,
+  "passed": true
+}
