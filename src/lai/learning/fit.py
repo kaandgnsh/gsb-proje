@@ -7,7 +7,7 @@ Sınamalar (her boyut için):
   c) boyut tanımı: örnek harfleri ve puan anahtarları tanımlı kutuplarda mı.
 Bir kural katıldığı sınamalardan birinde tutarsızsa `inconsistent`; değilse ve en az birinde
 tutarlıysa `consistent`; hiç sınanamadıysa `not_testable`. Puan kümesi tutarsızsa kümedeki tüm
-katılımcı kurallar tutarsız sayılır: hangi kuralın hatalı olduğu TAHMİN EDİLMEZ.
+katılımcılar tanı adayıdır; run_fit bunları topluca geçersiz kılmaz. Çelişki boyut incelemesine kaydedilir.
 """
 from __future__ import annotations
 
@@ -207,6 +207,17 @@ def run_fit(store, inventory_id: int, *, discovery_run_id: int | None = None) ->
     with store.transaction() as c:
         fr = c.execute("INSERT INTO fit_runs(inventory_id, discovery_run_id, example_count) "
                        "VALUES (?,?,?)", (inventory_id, discovery_run_id, len(examples))).lastrowid
+        reviews = {}
+        for e, _ in entries:
+            f = fits.get(e.entry_key)
+            if f and f.outcome == "inconsistent":
+                dim = e.dimension_code or e.content["body"]["dimension"]
+                review = reviews.setdefault(dim, {"possible_rules": [], "evidence": []})
+                review["possible_rules"].append(e.entry_key)
+                review["evidence"].append(f.detail)
+        for dim, detail in reviews.items():
+            c.execute("INSERT INTO dimension_reviews(inventory_id,fit_run_id,dimension_code,detail) "
+                      "VALUES (?,?,?,?)", (inventory_id, fr, dim, json.dumps(detail)))
         for e, _ in entries:
             fit = fits.get(e.entry_key)
             oc = fit.outcome if fit else "conflict"
@@ -216,6 +227,11 @@ def run_fit(store, inventory_id: int, *, discovery_run_id: int | None = None) ->
                                              json.dumps(fit.detail if fit else {},
                                                         ensure_ascii=False)))
             if fit is None or e.source not in _ADJUSTABLE or e.confidence == Confidence.CONFIRMED:
+                continue
+            # A score-set mismatch identifies a dimension review, not a faulty rule.
+            if oc == "inconsistent" and any(
+                    t["test"].startswith("scores") and t["mismatched"]
+                    for t in fit.detail["tests"]):
                 continue
             conf, src = _TARGET[oc]
             if (e.confidence, e.source) == (conf, src):

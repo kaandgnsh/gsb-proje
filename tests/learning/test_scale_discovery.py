@@ -51,7 +51,11 @@ def test_400_items_one_missed_reverse_flags_only_its_dimension(store, inventory_
                          ScriptedLLM(oracle([s for s in STATEMENTS if s not in missed])))
     cur = {e.entry_key: e.confidence for e in store.knowledge.current(inventory_id, kind="rule")}
     d = missed[0][2]["dimension"]
-    assert cur[f"rule:default_option_map:dim:{d}"] == "CONTRADICTORY"
+    assert cur[f"rule:default_option_map:dim:{d}"] == "WEAKLY_INFERRED"
+    reviews = store.conn.execute("SELECT dimension_code,detail FROM dimension_reviews WHERE fit_run_id=?",
+                                 (rep.fit.fit_run_id,)).fetchall()
+    assert {r[0] for r in reviews} == {d}
+    assert f"rule:default_option_map:dim:{d}" in reviews[0][1]
     assert cur[f"rule:threshold:dim:{d}"] == "STRONGLY_INFERRED"  # karar ayrı sınandı
     others = [k for k, v in cur.items() if not k.endswith(f"dim:{d}")]
     assert all(cur[k] == "STRONGLY_INFERRED" for k in others)

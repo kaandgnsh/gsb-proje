@@ -196,7 +196,9 @@ class KnowledgeRepo:
     def reject(self, entry_id: int, *, reason: str, by: str = "kullanıcı") -> Entry:
         with self.s.transaction():
             ev = self.s.inventory.add_evidence(kind="user_statement", note=reason)
-            return self._new_version(self.get(entry_id), source=Source.USER,
+            prev = self.get(entry_id)
+            confidence = Confidence.UNKNOWN if prev.confidence == Confidence.CONFIRMED else KEEP
+            return self._new_version(prev, source=Source.USER, confidence=confidence,
                                      validation=Validation.REJECTED,
                                      confirmation_ref=f"evidence:{ev}", reason=reason,
                                      created_by=by, evidence_ids=[ev])

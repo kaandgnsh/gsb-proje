@@ -219,7 +219,10 @@ def test_run_fit_updates_confidence_with_new_versions(store, inventory_id, docs_
     assert (sn.confidence, sn.source, sn.version) == ("STRONGLY_INFERRED", "example_fit", 2)
     assert imp.evidence_id in sn.evidence_ids
     bad = k.latest(inventory_id, f"rule:default_option_map:dim:{dim_of(12)}")
-    assert bad.confidence == "CONTRADICTORY" and "örnek" in bad.reason
+    assert bad.confidence == "WEAKLY_INFERRED"  # dimension review, not a faulty rule
+    review = store.conn.execute("SELECT detail FROM dimension_reviews WHERE fit_run_id=? AND dimension_code=?",
+                                (rep.fit_run_id, dim_of(12))).fetchone()
+    assert bad.entry_key in json.loads(review[0])["possible_rules"]
     tb = k.latest(inventory_id, "rule:tie_break:dim:E-I")
     assert tb.confidence == "CONFIRMED" and tb.version == 2  # kullanıcı onaylı kayda dokunulmaz
     assert rep.outcomes["rule:tie_break:dim:E-I"] == "consistent"

@@ -76,6 +76,10 @@ class ProfileRepo:
                        "item_number": e.item_number, "dimension_code": e.dimension_code,
                        "confidence": e.confidence, "source": e.source} for e in rules],
             "unconfirmed_critical": sorted(unconfirmed_critical),
+            "learning_facts": [{"entry_id":e.id,"entry_key":e.entry_key,"version":e.version,
+                                "content":e.content,"confidence":e.confidence}
+                               for e in self.s.knowledge.current(inventory_id, kind="fact")
+                               if e.validation != "rejected"],
         }
         return snap, [e.id for e in rules]
 

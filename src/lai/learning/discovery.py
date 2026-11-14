@@ -236,6 +236,13 @@ def _write_group(store, inventory_id: int, key: str, group: list[_Cand], rep: Di
     ev_ids = list(dict.fromkeys(c.evidence_id for c in group))
     existing = store.knowledge.latest(inventory_id, key)
     k = store.knowledge
+    if existing is not None and existing.validation == "rejected":
+        for c in group:
+            same = canonical(rt, existing.content.get("body") or {}) == canonical(rt, c.body)
+            c.status = c.code = "previously_rejected" if same else "conflicts_confirmed"
+            c.reason = f"reddedilmiş kural korunuyor (#{existing.id}); yeni kullanıcı kanıtı gerekli"
+            c.entry_id = existing.id
+        return
     if existing is not None and (existing.confidence == Confidence.CONFIRMED
                                  or existing.source in _PROTECTED):
         for c in group:
@@ -245,13 +252,6 @@ def _write_group(store, inventory_id: int, key: str, group: list[_Cand], rep: Di
                 c.status, c.code = "conflicts_confirmed", "conflicts_confirmed"
                 c.reason = (f"kullanıcı/belge kaynaklı kayıtla (#{existing.id}, "
                             f"{existing.confidence}) çelişiyor; yazılmadı")
-        return
-    if existing is not None and existing.validation == "rejected" and not conflict and \
-            canonical(rt, existing.content.get("body") or {}) == canonical(rt, first.body):
-        for c in group:
-            c.status, c.code = "previously_rejected", "previously_rejected"
-            c.reason = f"aynı kural daha önce reddedildi (#{existing.id})"
-            c.entry_id = existing.id
         return
     conf = Confidence.CONTRADICTORY if conflict else Confidence.WEAKLY_INFERRED
     reason = ("belgede aynı kural için farklı öneriler var: " +

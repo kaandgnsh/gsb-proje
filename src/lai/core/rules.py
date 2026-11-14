@@ -103,8 +103,12 @@ def _extra(rule_type: str, body: dict) -> list[str]:
 
 def validate_rule(rule_type: str, body) -> list[str]:
     """Hata listesi (boş = geçerli). Mesajlar Türkçe ve JSON yolu içerir."""
-    if rule_type not in SCHEMAS:
+    if not isinstance(rule_type, str) or rule_type not in SCHEMAS:
         return [f"'{rule_type}' kural kataloğunda yok (izinli türler: {', '.join(RULE_TYPES)})"]
+    try:
+        json.dumps(body, allow_nan=False)
+    except (ValueError, TypeError, RecursionError):
+        return ["$: sonlu JSON verisi gerekli"]
     errs = validate(body, SCHEMAS[rule_type])
     return errs or _extra(rule_type, body)
 
