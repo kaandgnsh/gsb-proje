@@ -1,0 +1,8 @@
+{
+  "network_namespace_changed": true,
+  "loopback_only": true,
+  "no_new_privs": true,
+  "seccomp_filter": true,
+  "no_capabilities": true,
+  "unix_socket_denied": true
+}

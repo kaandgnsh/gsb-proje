@@ -541,3 +541,26 @@ Gerçek Windows ve mevcut model bulunmazsa gerçek çıkarım bekleyen doğrulam
 M12 planına Windows WFP/AppContainer/alt süreç/loopback ve gerçek GUI doğrulama
 adımları yazılır; M12 uygulanmaz. Dosya çıktıları ve güvenilen görüntü sunucusu,
 uygulamanın doğrudan ağ/IPC sınırından ayrı güven ilişkileridir.
+
+### M12'ye bırakılan doğrulama kapıları — uygulanmadı
+
+M11 Linux kanıtı Windows kanıtı değildir. M12 onayı sonrası:
+
+- Gerçek Windows test makinesi/VM üzerinde süreç ve alt süreç ağ politikası seçilip
+  uygulanacak (uygulama kapsamlı WFP/AppContainer veya eşdeğeri); sistem genelinde
+  Ollama/OpenCode/diğer programları etkileyen firewall kuralı kullanılmayacak.
+- Uygulama ve kendi runtime'ı arasında loopback izinli kalırken host proxy,
+  IPv4/IPv6 TCP/UDP/DNS, named pipe/yerel çözümleyici/portal broker aktarımı pozitif
+  kontrollü test edilecek. IPv6 veya resolver yolu test dışı bırakılmayacak.
+- Filtre eksik/yetkisiz/yarım kurulum/port çakışması → değerlendirme açılmaması;
+  Job Object sahipliği, normal/çökme kapanışı ve yalnız kendi çocuklarının ölümü
+  gerçek Windows'ta doğrulanacak; sahte kernel32 sonucu kanıt sayılmayacak.
+- İmzalı/paketli Python, Qt ve runtime yol/SID/süreç kimlikleri değişse bile
+  filtre kapsamının korunması, servisler ve alt süreçler/GPU runner'ları sınanacak.
+- Belge seçimi/öğrenme/tekil/toplu devam/kayıt/PDF-XLSX önizleme gerçek GUI'de;
+  kalıcı veri ve profil sürümleriyle yeniden açılış sınanacak.
+- Linux paketinde bubblewrap bayrakları, libseccomp, user namespace izinleri,
+  Wayland ve gerçek CPU/GPU çıkarımı; kaldırma/geri alma sırasında kullanıcı
+  verisi ve mevcut sistem servislerinin korunması doğrulanacak.
+- Windows gerçek ağ ve GUI testleri geçmeden platform kapısı kaldırılmayacak.
+  Hedef model edinimi/kalite değerlendirmesi ayrıca izin ve ayrı sonuç gerektirir.

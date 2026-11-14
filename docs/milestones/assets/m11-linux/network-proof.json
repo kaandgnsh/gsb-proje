@@ -1,0 +1,92 @@
+{
+  "synthetic_only": true,
+  "public_network_used": false,
+  "baseline": {
+    "tcp4": true,
+    "udp4": true,
+    "dns_tcp4": true,
+    "dns_udp4": true,
+    "tcp6": true,
+    "udp6": true,
+    "dns_tcp6": true,
+    "dns_udp6": true,
+    "host_loopback_proxy": true,
+    "unix_proxy": true,
+    "abstract_unix_proxy": true,
+    "glibc_nss_resolve": true
+  },
+  "protected": {
+    "tcp4": false,
+    "udp4": false,
+    "dns_tcp4": false,
+    "dns_udp4": false,
+    "tcp6": false,
+    "udp6": false,
+    "dns_tcp6": false,
+    "dns_udp6": false,
+    "host_loopback_proxy": false,
+    "unix_proxy": false,
+    "abstract_unix_proxy": false,
+    "glibc_nss_resolve": false
+  },
+  "protected_child": {
+    "tcp4": false,
+    "udp4": false,
+    "dns_tcp4": false,
+    "dns_udp4": false,
+    "tcp6": false,
+    "udp6": false,
+    "dns_tcp6": false,
+    "dns_udp6": false,
+    "host_loopback_proxy": false,
+    "unix_proxy": false,
+    "abstract_unix_proxy": false,
+    "glibc_nss_resolve": false
+  },
+  "protected_ollama": {
+    "kernel": {
+      "network_namespace_changed": true,
+      "loopback_only": true,
+      "no_new_privs": true,
+      "seccomp_filter": true,
+      "no_capabilities": true,
+      "unix_socket_denied": true
+    },
+    "fake_inference": true,
+    "model_quality_test": false,
+    "port_conflict_preserved": true,
+    "foreign_process_preserved": true,
+    "owned_stopped": true,
+    "ollama_probes": {
+      "tcp4": false,
+      "udp4": false,
+      "dns_tcp4": false,
+      "dns_udp4": false,
+      "tcp6": false,
+      "udp6": false,
+      "dns_tcp6": false,
+      "dns_udp6": false,
+      "host_loopback_proxy": false,
+      "unix_proxy": false,
+      "abstract_unix_proxy": false,
+      "glibc_nss_resolve": false
+    }
+  },
+  "namespace_only": {
+    "tcp4": false,
+    "udp4": false,
+    "dns_tcp4": false,
+    "dns_udp4": false,
+    "tcp6": false,
+    "udp6": false,
+    "dns_tcp6": false,
+    "dns_udp6": false,
+    "host_loopback_proxy": false,
+    "unix_proxy": true,
+    "abstract_unix_proxy": false,
+    "glibc_nss_resolve": true
+  },
+  "baseline_hits": 16,
+  "protected_hits": 0,
+  "outer_interfaces": "Inter-|   Receive                                                |  Transmit\n face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed\n    lo:    4297      72    0    0    0     0          0         0     4297      72    0    0    0     0       0          0\n"
+}

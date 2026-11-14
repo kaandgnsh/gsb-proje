@@ -265,7 +265,7 @@ Kaynak dosya sonradan silinse de işin saklanan cevapları kullanılır.
 Uzun işlemler arka plandadır. Kapanış zorla işçi öldürmez; geçerli işlem sınırını
 bekler. Model isteğinde iptal, mevcut isteğin dönüşü/zaman aşımında uygulanabilir.
 Ayarlar yalnız uygulamanın loopback portunu kontrol eder; **11434 reddedilir**.
-Servis başlatılmaz/model indirilmez. Model yokken belge ve hazır profille puanlama çalışır.
+Sistem servisi yönetilmez/model indirilmez. M11 ile uygulamanın kendi süreci yalnız ağ yalıtımında başlatılır. Model yokken belge ve hazır profille puanlama çalışır.
 Yerel görünüm tercihleri seçilen veritabanının yanındaki `.ui.json` dosyasındadır;
 Ollama/OpenCode ayarları değiştirilmez.
 
@@ -307,3 +307,22 @@ PYTHONPATH=src .venv/bin/python -m lai.learning export-job --db /veri/lai.db --i
 
 Biçimler, diğer CLI örnekleri, hassasiyet/atomik yazma, testler ve sınırlamalar:
 [M10 raporu](docs/milestones/M10.md).
+
+
+### Ağ yalıtımı (M11)
+
+Linux masaüstü artık Qt ve değerlendirme deposunu açmadan zorunlu OS yalıtımı kurar.
+Bubblewrap/libseccomp/namespace veya Wayland eksikse Türkçe hata verir; yalıtımsız
+çalışmaz. Kendi model süreci aynı özel loopback içindedir; yeni Unix soketi dahil
+host proxy/çözümleyici yolları kapalıdır. Sistem servisi ve depoları değiştirilmez.
+Windows gerçek yalıtımı doğrulanmadığından değerlendirme başlangıcı kapalıdır.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m lai.ui --db /veri/lai.db --write-dir /veri/raporlar
+PYTHONPATH=src .venv/bin/python -m lai_setup doctor --network --pid PID --json
+```
+
+`--write-dir` ek rapor/veri klasörüne yazma yetkisi verir. Ağ tanısı anlık örnektir,
+yalıtım kanıtı değildir. CLI'ı korunan sınırda çalıştırma örnekleri, 747 teknik test,
+kontrollü DNS/proxy testleri, gerçek yerel çıkarım ve Windows sınırları:
+[M11 raporu](docs/milestones/M11.md), [güvenlik kapsamı](docs/security.md).
