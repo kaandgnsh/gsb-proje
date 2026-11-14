@@ -34,6 +34,8 @@ from lai_runtime.process import RuntimeManager
 from lai_setup.paths import resolve_paths
 
 pytestmark = pytest.mark.integration
+# Kategoriler: işaretsiz = technical (kod/entegrasyon). model_quality = modelin dil/akıl
+# yürütme kalitesi; başarısızlığı kod hatası değil, model sınırlamasıdır ve ayrı raporlanır.
 REPO = Path(__file__).resolve().parents[2]
 SRC_DIR = Path(os.environ.get("LAI_IT_SOURCE_DIR", "/var/lib/ollama"))
 WORK = Path(os.environ.get("LAI_IT_WORKDIR", REPO / ".it-work"))
@@ -107,6 +109,7 @@ def test_01_isolated_runtime_generates(it):
     assert f"OLLAMA_MODELS={it['paths'].models}".encode() in env
 
 
+@pytest.mark.model_quality
 @pytest.mark.parametrize("prompt,expected", [
     ("İstanbul Türkiye'de midir? Yanıtını yalnızca EVET ya da HAYIR olarak, büyük harfle ver.", "EVET"),
     ("Şu cümlede kaç kelime var: 'Bugün hava çok güzel.' Yanıtı yalnızca rakamla ver.", "4"),
@@ -125,6 +128,7 @@ SCHEMA = {"type": "object", "additionalProperties": False,
                          "gerekce": {"type": "string", "minLength": 3}}}
 
 
+@pytest.mark.model_quality
 @pytest.mark.parametrize("prompt,expected", [
     ("Şu cümlede kaç kelime var: 'Bugün hava çok güzel.' Yanıtı yalnızca rakamla ver.", "4"),
     ("'kitap' kelimesinin çoğul hâlini yaz. Yalnızca kelimeyi yaz.", "kitaplar"),

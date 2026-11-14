@@ -49,10 +49,25 @@ Her kilometre taşının çıktısı: kod + pytest + `docs/milestones/MXX.md` (n
 | M8 | Tekil + toplu değerlendirme | M7 | Katılımcı (anonim kimlik zorunlu, diğerleri isteğe bağlı), cevap seti içe aktarma, toplu iş, yeniden hesaplama | 400 madde × 200 katılımcı toplu iş < 30 sn (CPU); yeniden hesaplama yeni kayıt üretir, eskiyi değiştirmez |
 | M9 | Türkçe masaüstü arayüz | M6, M8 | PySide6 pencereler: içe aktarma, AI Öğrenme Merkezi (sohbet dahil), değerlendirme, katılımcılar, ayarlar; masaüstü kısayolu adımı | `pytest-qt`/offscreen duman testleri; tüm metinler Türkçe; uygulama ağsız açılır |
 | M10 | Raporlama | M8 | PDF (ReportLab, Türkçe font gömülü), XLSX, JSON | Raporlar PROVISIONAL uyarısını ve profil sürümünü taşır; Türkçe karakterler PDF'te doğru |
-| M11 | Güvenlik + ağ yalıtımı | M2, M9 | Kaynak dış-URL taraması, loopback-only istemci testi, `doctor --network` soket denetimi, systemd IPAddressDeny | Loopback dışı bağlantı/dinleme tespit edilir; güvenlik belgesi |
+| M11 | Güvenlik + ağ yalıtımı | M2, M9 | Kaynak dış-URL taraması, loopback-only istemci testi, `doctor --network` soket denetimi, uygulama + Ollama süreçlerinin **tüm** dış iletişim yollarının incelenmesi (TCP/UDP, DNS dahil; glibc nss-resolve → systemd-resolved Unix soketi gibi ağ ad alanını aşan yollar), gerçek ağ izolasyonu (ör. ağ + bağlama ad alanı) | Loopback dışı bağlantı/dinleme tespit edilir; **DNS sızıntısı dahil gerçek izolasyon doğrulama testi zorunlu** (yalnız HTTP denetimi yeterli değil); güvenlik belgesi |
 | M12 | Paketleme | tümü | AppImage, çevrimdışı paket oluşturucu (`lai_setup bundle`), PyInstaller spec + Inno Setup .iss | Temiz dizinde offline paketten kurulum ağ olmadan geçer; Windows betikleri ve .iss sözdizimi doğrulanır (Windows'ta gerçek test bilinen sınırlama) |
 
 Son teslim: README, kurulum kılavuzu, mimari, güvenlik, sorun giderme, test raporu (`docs/`).
+
+### Test politikası (kullanıcı kararı, 2026-11-14)
+
+- **Teknik doğruluk testleri** (`technical`, işaretsiz varsayılan): JSON şema geçerliliği, boyut/kutup eşleştirmesi, veri kaybı, parçalama/birleştirme, deterministik hesaplama, süreç ve bağlantı güvenliği. Başarısızlık = hata; düzeltilmeden kilometre taşı bitmez.
+- **Model kalite testleri** (`model_quality`): Türkçe anlama, talimat takibi, soru sınıflandırması, kural keşfi, belirsizlik tespiti, tutarlı açıklama. Birebir kelime eşleşmesi beklenmez; doğruluk, eksiksizlik ve tutarlılık ayrı ölçülür. Başarısızlık = model sınırlaması; test değiştirilmez/gizlenmez, raporda ayrı gösterilir.
+- pytest çıktısındaki "Test kategorileri" bölümü iki kategoriyi ayrı sayar (`tests/support/lai_test_categories.py`).
+- Hedef model `qwen3.5:4b`; 9B ile yapılan testler yalnız çalışma ortamı entegrasyonunu doğrular. 4B açık izinle temin edilince aynı testler tekrarlanır.
+
+### AI / deterministik iş bölümü (kullanıcı kararı, 2026-11-14)
+
+| İş | Yürüten |
+|---|---|
+| Soru analizi, kural keşfi | Yerel AI, düşünme modu açık |
+| Sayısal hesaplama, puanlama | Tamamen deterministik Python |
+| Rapor açıklamaları | Yerel AI |
 
 ---
 
