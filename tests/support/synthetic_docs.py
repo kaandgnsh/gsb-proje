@@ -92,7 +92,7 @@ def write_pdf(inv: dict, path: Path, *, header: str | None = "SENTETİK KİŞİL
         parts.append(f"<p>{it['number']}. {html.escape(it['text'])}</p>")
         if inline_options:
             parts.append("<p>" + "&nbsp;&nbsp;&nbsp;".join(
-                f"{c.lower()}) {html.escape(t)}" for c, t in it["options"]) + "</p>")
+                f"{c}) {html.escape(t)}" for c, t in it["options"]) + "</p>")
         else:
             parts.extend(f"<p>{c}) {html.escape(t)}</p>" for c, t in it["options"])
     for line in raw_lines or []:

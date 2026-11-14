@@ -4,7 +4,6 @@ import shutil
 import stat
 
 import pytest
-pytest_plugins = ["ingest_helpers"]
 from synthetic_docs import answer_key_for, make_doc_inventory, write_csv, write_json, write_pdf
 
 from lai.ingest import service
