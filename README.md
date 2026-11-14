@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1, M2 ve M3 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1–M4 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -56,3 +56,15 @@ python -m lai_setup db verify <yedek.db>      # yedeği denetle
 python -m lai_setup db restore <yedek.db>     # geri yükle (önce mevcut DB yedeklenir)
 ```
 Veritabanı `~/.local/share/local-assessment-ai/data/lai.db`; kaldırmada korunur.
+
+## Belge içe aktarma
+
+PDF, DOCX, XLSX, CSV ve JSON envanter belgeleri deterministik olarak (AI'sız) ayrıştırılır.
+Hata varsa envanter sürümü oluşturulmaz; aynı belge ikinci kez aktarılmaz.
+
+```bash
+.venv/bin/python -m lai.ingest parse envanter.pdf          # yalnız ayrıştır ve raporla
+.venv/bin/python -m lai.ingest import --db data/lai.db --inventory "Envanterim" envanter.pdf
+.venv/bin/python -m lai.ingest import ... --encoding cp1254 eski.csv   # UTF-8 olmayan CSV
+```
+JSON biçimi (`lai-inventory` sürüm 1) `src/lai/ingest/jsonfmt.py` içinde belgelenmiştir.
