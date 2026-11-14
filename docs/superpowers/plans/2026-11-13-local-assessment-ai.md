@@ -417,3 +417,32 @@ Katalog dışı tür → red. Bilgi kaydı içeriği: `{"body": …, "explanatio
 3. **Örnekler + puan sayımı + uyum** — test: `lai-examples` şema hataları yol bilgisiyle; tutarlı küme → STRONGLY_INFERRED; tek ters madde hatalı → küme CONTRADICTORY; puansız harfli örnek + eşik; berabere + tie_break; eksik cevap politikası; eksik eşleme → sınanamaz; örnek yok → WEAKLY_INFERRED.
 4. **AI katmanı + keşif** — test (sahte LLM): alıntısı belgede olmayan öneri reddedilir; katalog dışı / şema dışı / olmayan madde reddedilir; aynı öneri iki parçadan → tek kayıt, iki kanıt; çelişen öneri → CONTRADICTORY; onaylı kayıtla çelişen öneri yazılmaz; ikinci çalıştırma yeni sürüm üretmez; LLM ulaşılamaz → çalıştırma `failed`, bilgi yazılmaz; bozuk JSON → parça `invalid_output`; istem enjeksiyonu metni veri olarak kalır; hiçbir aday CONFIRMED değil.
 5. **CLI + ölçek + belge** — test: sahte Ollama sunucusuyla uçtan uca `discover`; 11434 reddedilir; 400 maddelik envanter + kılavuz + 50 örnek → süre ve doğruluk; `docs/milestones/M05.md`.
+
+---
+
+## M7 — Deterministik puanlama (2026-11-14)
+
+Kapsam: saf Python ortak giriş noktası; yalnız sentetik veri. M8 arayüzü/toplu iş akışı,
+kurulum, model ve dış servis çağrısı yok. M6 commit'leri 209cfc8, 3337a49, 03e6c7d
+ata doğrulamasıyla kontrol edilir; başlangıç referansı 513 teknik testtir.
+
+1. Başlangıç takımını çalıştır ve sonucu M07'ye kaydet.
+2. Katalog v2: mevcut on türün biçimini koru; `aggregation` (sum/mean),
+   `dimension_weight`, `zero_score`, `precision` ekle. Normalizasyon parametrelerinin
+   yürütülebilir alt kümesini motor ayrıca doğrulasın; serbest formül/kod çalıştırma yok.
+3. `lai.core.scoring`: sınav/profil sürümü ve cevaplardan Decimal puan + izlenebilir
+   sonuç. M5 `build_model` eşleme/ters önceliği ve `decide` karar semantiği yeniden kullanılır.
+   Yerel 50 basamaklı Decimal bağlamı; seçenek → toplam/ortalama → boyut ağırlığı →
+   normalizasyon → sıfır/eşik/eşitlik → yalnız gösterimde yuvarlama.
+4. Donmuş profillere envanter sürümü, sıralama, kaynak/doğrulama/kanıt metaverisi,
+   gereksinimlerin boyut kapsamı ve boyut incelemelerini ekle. Eski snapshot'ları değiştirme.
+   UNKNOWN/CONTRADICTORY kritik durum etkilenen boyutu engeller; çıkarım kesinleşmez.
+5. `lai.scoring` depo bağdaştırıcısı: sürümleri yükle ve saf motoru çağır; değerlendirme
+   yazma veya toplu iş yapma. M8 her iki akışta aynı giriş noktasını kullanabilir.
+6. El hesabı örnekleri, ENTP harf eşleme (1.85,-1.32,2.45,-3.10), sınırlar, hatalı girdiler,
+   M5 uyumu, kısmi sonuç, eski sürüm/sonuç koruması, 1000 tekrar, 400 madde ölçümü.
+7. Tam teknik takım, statik/katman kontrolü, M07 raporu ve ayrı yerel commit'ler.
+   Push yok; M7 tamamlanınca dur.
+
+Sayısal/formül semantiği gerçek envanterden çıkarılmış varsayımlar değildir. Parametre
+anlamı belirsiz normalizasyon ve M6 serbest metin bilgisi puanlama koduna dönüştürülmez.
