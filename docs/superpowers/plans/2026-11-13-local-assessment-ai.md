@@ -494,3 +494,24 @@ veri; kurulum, model indirme/dış servis ve mevcut Ollama/OpenCode ayarına yaz
 7. QtTest/offscreen sentetik uçtan uca, kes/kapat/aç/devam, CLI eşitliği, model yokluğu,
    duyarlılık ve katman testleri; mümkünse yerel Linux oturumunda otomatik duman denemesi.
 8. Tam takım + M09 raporu + ayrı yerel commit'ler; PDF/rapor dışa aktarma M10'da kalır.
+
+## M10 — Yerel raporlama ve dışa aktarma (2026-11-15)
+
+Başlangıç: M09 raporu, M10 ana kapsamı ve değişmez assessment/results yapısı
+incelendi. Referans doğrulaması 699 geçti, 16 gerçek entegrasyon seçilmedi,
+227,71 saniye. Windows GUI ve gerçek model kalitesi doğrulanmış sayılmayacak.
+
+1. Qt/model/puanlama çağrısı olmayan ortak `lai.reports`: kayıtlı sonuç, kendi
+   sürümü ve hesap dökümü; Türkçe deterministik açıklamalar; Decimal → tam metin.
+2. Tekil PDF (lisansıyla paketlenmiş Türkçe font), XLSX, CSV, JSON; toplu CSV/XLSX
+   ve tekil PDFleri içeren ZIP + iş özeti. Başarısız/bekleyen satırlar korunur.
+3. Aynı dosya sisteminde geçici çıktı + fsync + atomik replace; hata/iptalde temizle.
+   Spreadsheet formül enjeksiyonunu engelle; rapor hedefi DB/günlük olamaz.
+4. Mevcut CLI ve sonuç/geçmiş/toplu ekranlarını aynı servise bağla; QThread,
+   ilerleme/iptal ve açık kullanıcı eylemiyle yerel görüntüleyicide açma.
+5. Format eşitliği, eski/kısmi/hatalı/bekleyen sonuçlar, Unicode/uzun PDF,
+   hassasiyet, enjeksiyon ve disk hataları; gerçek Wayland PDF/Excel oturumu.
+6. Tam teknik takım ve M10 raporu, ayrı yerel commitler. Push yok, M11'e geçme.
+
+Ana planın M10 kapsamı model yorumu gerektirmiyor. Rapor açıklamaları güvenilir
+kayıt alanlarından şablonla üretilir; model bağımlılığı ve çağrısı eklenmez.
