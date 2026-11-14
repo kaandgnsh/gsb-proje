@@ -3,7 +3,7 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1–M4 tamamlandı — bkz. `docs/milestones/`.
+> Geliştirme sürüyor. Durum: M1–M5 tamamlandı — bkz. `docs/milestones/`.
 
 ## Hızlı başlangıç (Linux)
 
@@ -68,3 +68,18 @@ Hata varsa envanter sürümü oluşturulmaz; aynı belge ikinci kez aktarılmaz.
 .venv/bin/python -m lai.ingest import ... --encoding cp1254 eski.csv   # UTF-8 olmayan CSV
 ```
 JSON biçimi (`lai-inventory` sürüm 1) `src/lai/ingest/jsonfmt.py` içinde belgelenmiştir.
+
+## Puanlama kuralı keşfi
+
+Yerel AI belgelerde **açıkça yazan** puanlama kurallarını aday olarak önerir; her aday sabit
+kural kataloğuna, birebir alıntıya, envantere ve (varsa) örnek sonuçlara karşı deterministik
+olarak doğrulanır. Hiçbir aday kendiliğinden doğrulanmış (CONFIRMED) sayılmaz.
+
+```bash
+.venv/bin/python -m lai.learning reference --db data/lai.db --inventory "Envanterim" yönerge.pdf
+.venv/bin/python -m lai.learning examples  --db data/lai.db --inventory "Envanterim" örnekler.json
+.venv/bin/python -m lai.learning discover  --db data/lai.db --inventory "Envanterim"   # 127.0.0.1:11435
+.venv/bin/python -m lai.learning rules     --db data/lai.db --inventory "Envanterim"
+```
+Örnek sonuç biçimi (`lai-examples` sürüm 1) `src/lai/learning/examples.py`, kural kataloğu
+`src/lai/core/rules.py` içinde belgelenmiştir.
