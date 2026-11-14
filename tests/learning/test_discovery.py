@@ -213,3 +213,27 @@ def test_thinking_and_prompt_hash_stored(store, inventory_id, setup):
     row = store.conn.execute("SELECT thinking, prompt_sha256, eval_count FROM discovery_chunks "
                              "WHERE run_id=?", (rep.run_id,)).fetchone()
     assert row[0] == "düşünce: sentetik" and len(row[1]) == 64 and row[2] == 7
+
+
+def test_document_of_another_inventory_is_refused(store, inventory_id, docs_dir, tmp_path, setup):
+    other = store.inventory.create_inventory("Başka")
+    did = import_reference_document(store, other, write_guide_pdf(tmp_path / "b.pdf"),
+                                    documents_dir=docs_dir).document_id
+    with pytest.raises(ValueError, match="envantere ait değil"):
+        discover_rules(store, inventory_id, ScriptedLLM(oracle(STATEMENTS)), document_ids=[did])
+    assert store.conn.execute("SELECT COUNT(*) FROM discovery_runs").fetchone()[0] == 0
+
+
+def test_long_chunk_prompt_stays_within_window_budget(store, inventory_id, docs_dir, tmp_path):
+    """Varsayılan parça + sistem istemi, num_ctx'in yarısını aşmaz (kalan yarı düşünme/çıktı).
+    Kaba üst sınır: 1 belirteç ≤ 2 karakter (Türkçe için kötümser)."""
+    from lai.ai.llm import OllamaLLM
+    lines = [f"Satır {i}: bu sentetik yönerge cümlesi parça uzunluğunu doldurmak içindir."
+             for i in range(400)]
+    did = import_reference_document(store, inventory_id, write_guide_pdf(tmp_path / "u.pdf", lines),
+                                    documents_dir=docs_dir).document_id
+    llm = ScriptedLLM(lambda c, p: {"candidates": []})
+    discover_rules(store, inventory_id, llm, document_ids=[did])
+    assert max(len(c["chunk"]) for c in llm.calls) > 5000  # varsayılan parça boyutuna ulaşıldı
+    longest = max(len(c["system"]) + len(c["prompt"]) for c in llm.calls)
+    assert longest / 2 <= OllamaLLM.OPTIONS["num_ctx"] / 2

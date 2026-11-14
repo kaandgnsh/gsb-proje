@@ -290,6 +290,10 @@ def _finish(store, rep: DiscoveryReport, status: str, message: str | None, meta:
 
 def discover_rules(store, inventory_id: int, llm, *, document_ids: list[int] | None = None,
                    max_chars: int = 6000, progress=None) -> DiscoveryReport:
+    all_docs = _documents(store, inventory_id)
+    foreign = [d for d in (document_ids or []) if d not in all_docs]
+    if foreign:
+        raise ValueError(f"belge(ler) {foreign} bu envantere ait değil ya da ham metni yok")
     with store.transaction() as c:
         c.execute(f"UPDATE discovery_runs SET status='failed', finished_at={_NOW}, "
                   f"message='yarıda kalmış çalıştırma (uygulama kapanmış olabilir)' "
@@ -298,7 +302,6 @@ def discover_rules(store, inventory_id: int, llm, *, document_ids: list[int] | N
                            "status) VALUES (?,?,?,?, 'running')",
                            (inventory_id, llm.model, PROMPT_VERSION, int(bool(llm.think)))).lastrowid
     rep = DiscoveryReport(run_id, "running")
-    all_docs = _documents(store, inventory_id)
     docs = list(document_ids) if document_ids else list(all_docs)
     meta = {"documents": docs, "max_chars": max_chars}
     try:

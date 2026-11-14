@@ -37,7 +37,10 @@ class LLM(Protocol):
 
 
 class OllamaLLM:
-    OPTIONS = {"temperature": 0, "seed": 0}
+    # num_ctx açıkça verilir: varsayılan bağlam penceresi küçük olabilir ve aşılırsa Ollama
+    # istemin BAŞINI (sistem talimatları dahil) sessizce keser. num_predict düşünme + yanıtı
+    # sınırlar. Parça boyutu (6000 karakter) bu bütçenin yarısına sığacak şekilde seçildi.
+    OPTIONS = {"temperature": 0, "seed": 0, "num_ctx": 12288, "num_predict": 6144}
 
     def __init__(self, base_url: str, model: str, *, think: bool = True, timeout: float = 900,
                  keep_alive: str | None = None):
