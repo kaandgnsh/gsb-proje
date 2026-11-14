@@ -117,7 +117,7 @@ def test_failed_operation_leaves_no_partial_rows(store, inv):
     iid, _ = inv
     v1 = _rule(store, iid)
     before = len(store.knowledge.learning_history(iid))
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         store.knowledge.apply_user_correction(
             iid, entry_key="rule:reverse:item:12", kind="rule",
             content={"x": object()},  # JSON'a çevrilemez: kanıt yazıldıktan sonra patlar

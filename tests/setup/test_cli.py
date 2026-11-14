@@ -70,7 +70,8 @@ def test_install_twice_is_idempotent(env, offline):
     mtime = cfg.stat().st_mtime_ns
     state1 = json.loads((home / "install-state.json").read_text(encoding="utf-8"))
     assert {k: v["status"] for k, v in state1["steps"].items()} == {
-        "dirs": "APPLIED", "config": "APPLIED", "venv": "APPLIED", "pydeps": "APPLIED"}
+        "dirs": "APPLIED", "config": "APPLIED", "venv": "APPLIED", "pydeps": "APPLIED",
+        "database": "APPLIED"}
     assert run(args, env) == 0
     state2 = json.loads((home / "install-state.json").read_text(encoding="utf-8"))
     assert {v["status"] for v in state2["steps"].values()} == {"SKIPPED"}

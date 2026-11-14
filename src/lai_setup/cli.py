@@ -13,6 +13,7 @@ from .detect import detect_system
 from .distro import missing_prereqs, strategy_for, suggest_command
 from .m1_steps import m1_steps
 from .m2_steps import m2_steps
+from .m3_steps import m3_steps
 from .paths import resolve_paths
 from .report import Report
 from .runner import CommandRunner, SystemRunner
@@ -27,7 +28,7 @@ DEFAULT_REQUIREMENTS = REPO_ROOT / "requirements" / "app.txt"
 
 def all_steps(skip_ai: bool = False):
     """Kurulum adımlarının tamamı. Sonraki kilometre taşları buraya ekler."""
-    return m1_steps() + ([] if skip_ai else m2_steps())
+    return m1_steps() + m3_steps() + ([] if skip_ai else m2_steps())
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -69,6 +70,17 @@ def _parser() -> argparse.ArgumentParser:
     mv = msub.add_parser("verify", parents=[common], help="modeli çalıştırarak doğrula")
     mv.add_argument("--model")
     msub.add_parser("list", parents=[common], help="uygulamanın modellerini listele")
+
+    dbp = sub.add_parser("db", parents=[common], help="veritabanı: durum, yedek, geri yükleme")
+    dsub = dbp.add_subparsers(dest="db_cmd", required=True)
+    dsub.add_parser("status", parents=[common])
+    db_b = dsub.add_parser("backup", parents=[common], help="yedek al")
+    db_b.add_argument("--to", help="yedek dizini (varsayılan: data/backups)")
+    db_v = dsub.add_parser("verify", parents=[common], help="yedeği doğrula")
+    db_v.add_argument("file")
+    db_r = dsub.add_parser("restore", parents=[common], help="yedekten geri yükle")
+    db_r.add_argument("file")
+    db_r.add_argument("--yes", action="store_true")
 
     rt = sub.add_parser("runtime", parents=[common], help="uygulamanın Ollama süreci")
     rsub = rt.add_subparsers(dest="runtime_cmd", required=True)
@@ -126,6 +138,10 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
         err(f"{paths.root} boş değil ve bir Local Assessment AI kurulumu değil. "
             "Güvenlik için bu dizine kurulmaz; boş ya da yeni bir dizin seçin (--lai-home).")
         return EXIT_USAGE
+
+    if args.cmd == "db":
+        from .db_cli import db_command
+        return db_command(args, paths, interactive, ask, out, err)
 
     if args.cmd in ("model", "runtime"):
         from .ai_cli import model_command, runtime_command
