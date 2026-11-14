@@ -217,7 +217,8 @@ def analyze(store, inventory_id, *, refresh_fit=True):
             present = [
                 e
                 for e in rr
-                if e.rule_type == category and not e.content.get("conflict")
+                if e.rule_type == {"zero_policy": "zero_score"}.get(category, category)
+                and not e.content.get("conflict")
             ]
             if category == "default_option_map" and not present and members:
                 covered = {

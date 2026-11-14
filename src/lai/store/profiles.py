@@ -10,6 +10,8 @@ import hashlib
 import json
 from dataclasses import dataclass
 
+from lai.core.rules import CATALOG_VERSION
+
 from .enums import Confidence
 
 
@@ -70,11 +72,44 @@ class ProfileRepo:
                  if e.validation != "rejected"]
         unconfirmed_critical = [r.req_key for r in self.s.questions.matrix(inventory_id)
                                 if r.critical and r.status != Confidence.CONFIRMED]
+        inventory_version = self.s.conn.execute(
+            "SELECT id FROM inventory_versions WHERE inventory_id=? ORDER BY version DESC LIMIT 1",
+            (inventory_id,)).fetchone()
+        dimensions = [d["code"] for d in self.s.inventory.dimensions(inventory_id)]
+        if not dimensions:
+            first_ids = dict(self.s.conn.execute(
+                "SELECT entry_key,MIN(id) FROM knowledge_entries WHERE inventory_id=? "
+                "AND kind='rule' AND rule_type='dimension_def' GROUP BY entry_key", (inventory_id,)))
+            dimensions = [e.content["body"]["dimension"] for e in
+                          sorted(rules, key=lambda e:first_ids.get(e.entry_key,e.id))
+                          if e.rule_type == "dimension_def"]
+        requirements = []
+        for r in self.s.questions.matrix(inventory_id):
+            dims = [r.dimension_code or "*"]
+            if r.req_key.startswith("m6:"):
+                row = self.s.conn.execute("SELECT payload FROM learning_gaps WHERE inventory_id=? AND gap_key=?",
+                                          (inventory_id, r.req_key[3:])).fetchone()
+                if row:
+                    dims = json.loads(row[0])["dimensions"]
+            requirements.append({"req_key":r.req_key, "dimensions":dims, "critical":r.critical,
+                                 "status":r.status, "category":r.category, "reason":r.status_reason})
+        fit = self.s.conn.execute("SELECT MAX(id) FROM fit_runs WHERE inventory_id=?", (inventory_id,)).fetchone()[0]
+        reviews = [{"dimension_code":r[0], "detail":json.loads(r[1])} for r in self.s.conn.execute(
+            "SELECT dimension_code,detail FROM dimension_reviews WHERE fit_run_id=? ORDER BY dimension_code", (fit,))]
         snap = {
+            "snapshot_format": 2,
+            "catalog_version": CATALOG_VERSION,
+            "inventory_id": inventory_id,
+            "inventory_version_id": inventory_version[0] if inventory_version else None,
+            "dimension_order": dimensions,
+            "requirements": requirements,
+            "dimension_reviews": reviews,
             "rules": [{"entry_id": e.id, "entry_key": e.entry_key, "version": e.version,
                        "rule_type": e.rule_type, "content": e.content, "summary": e.summary,
                        "item_number": e.item_number, "dimension_code": e.dimension_code,
-                       "confidence": e.confidence, "source": e.source} for e in rules],
+                       "confidence": e.confidence, "source": e.source,
+                       "validation": e.validation, "confirmation_ref": e.confirmation_ref,
+                       "evidence_ids": e.evidence_ids} for e in rules],
             "unconfirmed_critical": sorted(unconfirmed_critical),
             "learning_facts": [{"entry_id":e.id,"entry_key":e.entry_key,"version":e.version,
                                 "content":e.content,"confidence":e.confidence}
@@ -94,7 +129,7 @@ class ProfileRepo:
             last = self.latest_version(profile_id)
             if last and last.content_hash == digest:
                 return last  # değişiklik yok: yeni sürüm üretilmez
-            provisional = (not snap["rules"] or bool(snap["unconfirmed_critical"])
+            provisional = (not snap["rules"] or bool(snap["unconfirmed_critical"]) or bool(snap["dimension_reviews"])
                            or any(r["confidence"] != Confidence.CONFIRMED for r in snap["rules"]))
             vid = c.execute("INSERT INTO scoring_profile_versions(profile_id, version, snapshot, "
                             "content_hash, provisional, note) VALUES (?,?,?,?,?,?)",

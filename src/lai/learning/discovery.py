@@ -174,7 +174,7 @@ def _poles_used(c: _Cand) -> set[str]:
         return set(b["options"].values())
     if t == "option_weight":
         return {p for pts in b["weights"].values() for p in pts}
-    if t in ("tie_break", "missing_answer_policy") or (t == "threshold" and "pole" in b):
+    if t in ("tie_break", "missing_answer_policy", "zero_score") or (t == "threshold" and "pole" in b):
         return {b["pole"]} if "pole" in b else set()
     return set()
 
