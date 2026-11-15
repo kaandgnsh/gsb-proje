@@ -14,5 +14,5 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests/setup", "tests/runtime", "tests/support", "tests/store"]
-addopts = "-m 'not integration' -p lai_test_categories -p ingest_helpers"
-markers = ["slow: creates real virtualenvs", "integration: real ollama binary and a real model"]
+addopts = "-m 'not integration' -p lai_test_categories -p ingest_helpers -p model_guard_plugin"
+markers = ["slow: creates real virtualenvs", "integration: real ollama binary and a real model", "real_guard: uses the real model isolation guard (no test patch)"]

@@ -35,6 +35,26 @@ Fazla devralınan FD'ler kapatılır; standart FD'lerde bağlı soket reddedilir
 Proxy, oturum bus'ı, SSH agent, yükleyici ve özel Qt eklenti ortamları taşınmaz.
 `OLLAMA_NO_CLOUD=1` ek önlemdir; tek başına güvenlik kanıtı değildir.
 
+## Yapay zekâ yalnız yalıtımda çalışır
+
+Model süreci (uygulamanın Ollama'sı) ve modele giden her istek, hangi giriş noktasından
+gelirse gelsin (arayüz, kurulum aracı, `lai.learning` CLI, deneme modu) bu sınırın
+içindedir. Tek kapı kodda zorunludur (`lai_runtime.guard`):
+
+- `OllamaClient`, `/api/version` dışındaki her isteği **bağlantı açmadan önce** reddeder;
+  yalıtım çekirdekten doğrulanmamışsa modele hiçbir bayt gitmez. `LAI_SANDBOX_ACTIVE`
+  bayrağı tek başına yetmez.
+- `RuntimeManager.start()` yalıtım doğrulanmadan model sürecini başlatmaz.
+- Kurulumun modeli çalıştıran adımları (içe aktarma, `model verify`/`list`, kurulum
+  sonu çıkarım doğrulaması, deneme modu model kopyası) kendiliğinden ayrı bir sınır
+  sürecinde yürür (`lai_setup.isolated`). Sınır kurulamazsa işlem hata verir;
+  yalıtımsız yedek yol yoktur. Bu yüzden Windows'ta model çalıştırılmaz.
+
+Tek istisna, kurulum aracının **açık izinli** model indirmesidir (`--online`). O süreç
+ayrı kayıt dosyası kullanır ve istemcisi yalnız `/api/pull` gönderebilir: modeli
+çalıştıramaz, ona veri gönderemez. İndirme biter bitmez kapanır; ardından model
+yalnız yalıtımda çalışır.
+
 ## Hata ve süreç sahipliği
 
 Yalıtım önkoşulu/Wayland/binary/namespace/filter kurulumu başarısızsa Türkçe hata
@@ -61,10 +81,12 @@ veriler yerel, eşitlenmeyen dosya sisteminde tutulmalıdır. Harici görüntül
 portal işlemleri ağ sınırına tabi kalır; PDF/XLSX uygulama içi önizleme çalışır.
 Dosya sistemi yalıtımı/gizlilik veya tüm bilgisayar için firewall iddia edilmez.
 
-Doğrudan kütüphane/CLI çağrısı kendi başına OS yalıtımı değildir. CLI işlemini aynı
-sınırda kullanmak için `python -m lai_runtime.sandbox --write-dir DİZİN -- KOMUT`
-kullanılır. Desteklenen masaüstü ve oluşturulan başlatıcı bunu otomatik yapar.
-Kurulum motorunun açık çevrimiçi edinme komutları bu çalışma zamanı sınırından ayrıdır.
+Doğrudan kütüphane/CLI çağrısı kendi başına OS yalıtımı değildir; ancak model kullanan
+her çağrı yalıtım dışında reddedilir. Modelli CLI işlemleri için
+`python -m lai_runtime.sandbox --write-dir DİZİN -- KOMUT` kullanılır. Desteklenen
+masaüstü ve oluşturulan başlatıcı bunu otomatik yapar. Kurulum motorunun açık
+çevrimiçi edinme komutları (paket ve model dosyası indirme) bu sınırın dışındadır ve
+modeli çalıştıramaz.
 
 `doctor --network --pid PID` salt okunur TCP/UDP/Unix soket örneğidir. Kısa
 bağlantıları kaçırabilir; `enforcement_verified=false` çıktısı bilerek korunur.

@@ -4,6 +4,9 @@ Kurallar:
 - Başlatmadan hemen önce port yeniden denetlenir; dolu ve sahibi biz değilsek PortConflictError.
 - Yalnız kendi başlattığımız süreç durdurulur: pid + başlangıç zamanı + sahiplik kimliği.
 - Sistemdeki Ollama servisine (11434) hiçbir koşulda sinyal gönderilmez.
+- Model süreci yalnız doğrulanmış ağ yalıtımında başlar (`guard`). `download_only=True`
+  yalnız kurulumun açık izinli indirmesi içindir: ayrı kayıt dosyası kullanır ve
+  istemcisi yalnız `/api/pull` gönderebilir.
 """
 from __future__ import annotations
 
@@ -19,6 +22,7 @@ from pathlib import Path
 from .client import OllamaClient, OllamaError
 from .config import RuntimeConfig
 from .env import build_env
+from .guard import require_model_isolation
 from .ports import PortConflictError, port_in_use
 
 
@@ -45,14 +49,17 @@ def select_ops(platform: str):
 
 class RuntimeManager:
     def __init__(self, cfg: RuntimeConfig, paths, *, platform: str | None = None,
-                 binary: str | None = None, base_env: dict | None = None):
+                 binary: str | None = None, base_env: dict | None = None,
+                 download_only: bool = False):
         self.cfg, self.paths = cfg, paths
+        self.download_only = download_only
         self.platform = platform or ("windows" if sys.platform.startswith("win") else "linux")
         self.ops = select_ops(self.platform)
         self._binary = binary or cfg.binary
         self.base_env = dict(os.environ if base_env is None else base_env)
-        self.record_file: Path = paths.runtime / "ollama-process.json"
-        self.log_file: Path = paths.runtime / "ollama.log"
+        name = "ollama-download" if download_only else "ollama"
+        self.record_file: Path = paths.runtime / f"{name}-process.json"
+        self.log_file: Path = paths.runtime / f"{name}.log"
         self._proc = None
 
     @property
@@ -60,7 +67,7 @@ class RuntimeManager:
         return self.cfg.base_url
 
     def client(self, timeout: float = 600) -> OllamaClient:
-        return OllamaClient(self.base_url, timeout=timeout)
+        return OllamaClient(self.base_url, timeout=timeout, download_only=self.download_only)
 
     def resolve_binary(self) -> str | None:
         exe = "ollama.exe" if self.platform == "windows" else "ollama"
@@ -101,6 +108,8 @@ class RuntimeManager:
         return RuntimeStatus(True, rec["pid"], rec["port"], True, ver)
 
     def start(self, timeout: float = 60) -> RuntimeStatus:
+        if not self.download_only:
+            require_model_isolation()
         rec = self._load()
         if self._owned(rec):
             if rec.get("port") == self.cfg.port and self.status().version:

@@ -8,22 +8,25 @@ from pathlib import Path
 
 from lai_runtime.client import ModelNotFoundError, OllamaError
 from lai_runtime.config import load_runtime_config
-from lai_runtime.models import ModelSourceError, find_source_model, import_model, source_from_gguf
+from lai_runtime.models import ModelSourceError
 from lai_runtime.ports import PortConflictError
 from lai_runtime.process import RuntimeManager, RuntimeStartError
+from lai_runtime.sandbox import IsolationError
 
-from .m2_steps import _progress, model_installed, running, verify_inference
+from .isolated import run_isolated
+from .m2_steps import _progress, model_installed, running
 from .state import InstallState
 
 EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_CANCEL = 0, 1, 2, 3
 
 
-def _mgr(paths, platform, model: str | None = None) -> RuntimeManager:
+def _mgr(paths, platform, model: str | None = None, *, download_only: bool = False
+         ) -> RuntimeManager:
     cfg = load_runtime_config(paths)
     if model:
         from dataclasses import replace
         cfg = replace(cfg, model=model)
-    return RuntimeManager(cfg, paths, platform=platform)
+    return RuntimeManager(cfg, paths, platform=platform, download_only=download_only)
 
 
 def _pin(paths, model: str) -> None:
@@ -53,7 +56,8 @@ def model_command(args, paths, platform, interactive, ask, out, err) -> int:
                 if ask("İndirmeye izin veriyor musunuz? [e/H]: ").lower() not in ("e", "evet", "y", "yes"):
                     out("İptal edildi; hiçbir şey indirilmedi.")
                     return EXIT_CANCEL
-            with running(mgr) as client:
+            # Yalnız indirme: ağ yalnız bu dosya için kullanılır; model bu süreçte çalıştırılamaz.
+            with running(_mgr(paths, platform, model, download_only=True)) as client:
                 client.pull(model, _progress)
             print(file=sys.stderr)
             _pin(paths, model)
@@ -61,42 +65,40 @@ def model_command(args, paths, platform, interactive, ask, out, err) -> int:
             return EXIT_OK
 
         if args.model_cmd == "import":
-            src = Path(args.source).expanduser()
+            src = Path(args.source).expanduser().resolve()
             target = args.target or model
             if src.is_file():
-                source = source_from_gguf(src, target)
+                params = {"gguf": src}
             elif src.is_dir():
                 if not args.name:
                     err("Dizinden içe aktarmada --name (kaynaktaki model adı) gerekir.")
                     return EXIT_USAGE
-                source = find_source_model(src, args.name)
+                params = {"dir": src, "name": args.name}
             else:
                 err(f"Kaynak bulunamadı: {src}")
                 return EXIT_USAGE
-            out(f"{source.gguf} → {target} (kaynak yalnız okunur)")
-            with running(mgr) as client:
-                import_model(client, source, target, _progress)
-            print(file=sys.stderr)
+            out(f"{src} → {target} (kaynak yalnız okunur, model ağ yalıtımında)")
+            run_isolated("import", paths, model=model, target=target, **params)
             _pin(paths, target)
             out(f"{target} içe aktarıldı.")
             return EXIT_OK
 
         if args.model_cmd == "verify":
             t = time.time()
-            ok, msg = verify_inference(mgr)
+            r = run_isolated("verify", paths, model=model)
+            ok, msg = r["ok"], r["message"]
             (out if ok else err)(f"{'Doğrulandı' if ok else 'Doğrulanamadı'}: {msg} "
                                  f"({time.time() - t:.1f} sn)")
             return EXIT_OK if ok else EXIT_FAIL
 
         if args.model_cmd == "list":
-            with running(mgr) as client:
-                for m in client.list_models():
-                    out(f"  {m['name']}  {m.get('digest', '')[:19]}")
+            for m in run_isolated("list", paths, model=model)["models"]:
+                out(f"  {m['name']}  {m.get('digest', '')[:19]}")
             return EXIT_OK
     except (ModelSourceError, ModelNotFoundError) as e:
         err(f"Model hatası: {e}")
         return EXIT_FAIL
-    except (PortConflictError, RuntimeStartError, OllamaError) as e:
+    except (PortConflictError, RuntimeStartError, OllamaError, IsolationError) as e:
         err(f"Çalışma ortamı hatası: {e}")
         return EXIT_FAIL
     return EXIT_USAGE
@@ -121,7 +123,7 @@ def runtime_command(args, paths, platform, interactive, ask, out, err) -> int:
     if args.runtime_cmd == "run":
         try:
             st = mgr.start()
-        except (PortConflictError, RuntimeStartError) as e:
+        except (PortConflictError, RuntimeStartError, OllamaError) as e:
             err(str(e))
             return EXIT_FAIL
         out(f"Çalışıyor: pid {st.pid}, {mgr.base_url}. Durdurmak için Ctrl+C.")

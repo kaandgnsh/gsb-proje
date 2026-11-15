@@ -7,7 +7,13 @@
   python -m lai.learning rules     --db YOL --inventory AD          # güncel kurallar
 
 Yerel AI yalnız 127.0.0.1 üzerinden ve uygulamanın kendi portundan kullanılır; 11434 (sistem
-Ollama servisi) reddedilir. Çıkış kodları: 0 tamam · 1 kısmen/başarısız · 2 kullanım.
+Ollama servisi) reddedilir. Modeli kullanan komutlar yalnız ağ yalıtımında çalışır:
+
+  python -m lai_runtime.sandbox --write-dir VERİ_DİZİNİ -- python -m lai.learning discover …
+
+Yalıtım doğrulanmazsa modele hiçbir veri gönderilmez ve komut 2 ile çıkar. Yalıtım içinde
+uygulamanın modeli çalışmıyorsa (`LAI_HOME`) komut onu başlatır, bitince kapatır.
+Çıkış kodları: 0 tamam · 1 kısmen/başarısız · 2 kullanım.
 """
 from __future__ import annotations
 
@@ -90,8 +96,14 @@ def _discover(a, store, inv) -> int:
     def progress(n, name, i, total):
         if not a.json:
             print(f"  … {name} parça {i}/{total}", file=sys.stderr, flush=True)
-    rep = discover_rules(store, inv, llm, document_ids=a.document or None,
-                         max_chars=a.max_chars, progress=progress)
+    from lai.ai.runtime import NotIsolated, model_runtime
+    try:
+        with model_runtime(cfg):
+            rep = discover_rules(store, inv, llm, document_ids=a.document or None,
+                                 max_chars=a.max_chars, progress=progress)
+    except NotIsolated as e:
+        print(f"HATA: {e}", file=sys.stderr)
+        return 2
     _out(a, discovery_dict(rep), format_discovery(rep))
     return 0 if rep.status == "completed" else 1
 
@@ -130,6 +142,7 @@ def _missing(a, store, inv):
 
 def _answer(a, store, inv):
     from lai.ai.llm import LLMError, LLMUnavailable
+    from lai.ai.runtime import NotIsolated
     from lai.learning.interactive import answer, interpret_answer
     row = store.conn.execute('SELECT inventory_id FROM learning_gaps WHERE id=?',(a.question,)).fetchone()
     if row is None or row[0] != inv:
@@ -143,10 +156,12 @@ def _answer(a, store, inv):
             from lai.ai.llm import OllamaLLM
             from lai_runtime.config import RuntimeConfig
             cfg = RuntimeConfig(port=a.port,model=a.model)
-            result = interpret_answer(store,a.question,a.text,OllamaLLM(cfg.base_url,cfg.model))
+            from lai.ai.runtime import model_runtime
+            with model_runtime(cfg):
+                result = interpret_answer(store,a.question,a.text,OllamaLLM(cfg.base_url,cfg.model))
         else:
             result = answer(store,a.question,a.action,a.text,structured=structured)
-    except (ValueError, KeyError, LLMError, LLMUnavailable) as e:
+    except (ValueError, KeyError, LLMError, LLMUnavailable, NotIsolated) as e:
         print(f'HATA: {e}',file=sys.stderr)
         return 2
     _out(a,result,f"Yanıt kaydedildi: {result['state']}; profil #{result['profile_version_id']}")

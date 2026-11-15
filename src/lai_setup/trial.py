@@ -48,10 +48,9 @@ def _write_config(paths, model: str) -> None:
 
 
 def _import_model(paths, store: Path, model: str, out) -> None:
-    from lai_runtime.config import RuntimeConfig
-    from lai_runtime.models import find_source_model, import_model
-    from lai_runtime.process import RuntimeManager
+    from lai_runtime.models import find_source_model
 
+    from .isolated import run_isolated
     from .m2_steps import model_installed
 
     if model_installed(paths, model):
@@ -65,16 +64,7 @@ def _import_model(paths, store: Path, model: str, out) -> None:
             f"Deneme kökünde yer yetersiz: model {size >> 20} MB, boş {free >> 20} MB"
         )
     out(f"Model salt okunur kopyalanıyor: {model} ({size >> 20} MB) — {store}")
-    mgr = RuntimeManager(
-        RuntimeConfig(port=_free_port(), model=model),
-        paths,
-        base_env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
-    )
-    mgr.start(timeout=60)
-    try:
-        import_model(mgr.client(), source, model)
-    finally:
-        mgr.stop()
+    run_isolated("import", paths, model=model, dir=store, name=model)
     out("Model kopyalandı.")
 
 

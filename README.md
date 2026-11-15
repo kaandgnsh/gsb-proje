@@ -216,7 +216,12 @@ bilgisi isteğe bağlıdır (dosyada varsa doldurulur).
 - **Port** (varsayılan `11435`) ve **model adı** (varsayılan `qwen3.5:4b`) buradan seçilir.
   `11434` kabul edilmez; böylece bilgisayarda kurulu başka bir Ollama'ya dokunulmaz.
 - **Uygulamanın Ollama sürecini başlat / durdur** ve **Yerel model durumunu kontrol et**
-  düğmeleri modeli yönetir. Model internete çıkamayacak şekilde yalıtılmış çalışır.
+  düğmeleri modeli yönetir.
+- **Yapay zekâ dışarıyla asla bağlantı kurmaz:** Model yalnız kapalı bir kutuda (ağ
+  yalıtımı) çalışır. Bu kutuda internet yoktur; dışarıya veri gönderemez, dışarıdan veri
+  alamaz. Kutu kurulamazsa model hiç çalışmaz; "yalıtımsız çalıştır" seçeneği yoktur.
+  İnternet yalnız ilk kurulumda, sizin açık izninizle, model dosyasını indirmek için
+  kullanılır; o sırada model çalışmaz.
 - En altta verilerin saklandığı veritabanı dosyasının yeri yazar.
 
 ## Hızlı başlangıç (Linux)
@@ -251,8 +256,10 @@ uv venv -p 3.14 .venv && uv pip install --python .venv -r requirements/app.txt p
 ## Yapay zekâ modeli
 
 Model pakete gömülmez. Hedef makinede ilk kurulumda indirilir; indirme yalnız kurulum
-aracında, `--online` açık izniyle yapılır. Uygulamanın kendisi yalıtım içinde çalışır ve
-internete çıkamaz.
+aracında, `--online` açık izniyle yapılır ve o süreç modeli çalıştıramaz (yalnız
+`/api/pull`). Model **her zaman** ağ yalıtımında çalışır: arayüz, kurulum doğrulaması,
+`model import/verify/list` ve CLI dahil. Yalıtım doğrulanamazsa modele hiçbir veri
+gönderilmez ve işlem hata verir. Ayrıntı: [docs/security.md](docs/security.md).
 
 ```bash
 ./lai-0.12.1-linux-x86_64.AppImage --setup install --online --yes   # ilk kurulum: Ollama süreci + model
@@ -297,7 +304,7 @@ olarak doğrulanır. Hiçbir aday kendiliğinden doğrulanmış (CONFIRMED) say�
 ```bash
 .venv/bin/python -m lai.learning reference --db data/lai.db --inventory "Envanterim" yönerge.pdf
 .venv/bin/python -m lai.learning examples  --db data/lai.db --inventory "Envanterim" örnekler.json
-.venv/bin/python -m lai.learning discover  --db data/lai.db --inventory "Envanterim"   # 127.0.0.1:11435
+.venv/bin/python -m lai_runtime.sandbox --write-dir data -- .venv/bin/python -m lai.learning discover --db data/lai.db --inventory "Envanterim"   # yalnız ağ yalıtımında
 .venv/bin/python -m lai.learning rules     --db data/lai.db --inventory "Envanterim"
 ```
 Örnek sonuç biçimi (`lai-examples` sürüm 1) `src/lai/learning/examples.py`, kural kataloğu
@@ -331,7 +338,10 @@ Serbest metni yerel modelle yorumlamak isteğe bağlıdır:
 python -m lai.learning answer --db /veri/lai.db --inventory "Sentetik Envanter" --question 1 --action text --text "Birinci madde X boyutunda ters puanlanır" --interpret-with-model --port 11435 --model YEREL_MODEL
 ```
 
-Bu komut model indirmez veya servis başlatmaz; mevcut uygulama modeline bağlanır.
+Bu komut model indirmez. Yalnız ağ yalıtımında çalışır (`python -m lai_runtime.sandbox
+--write-dir VERİ_DİZİNİ -- python -m lai.learning …`, `LAI_HOME` ayarlı); uygulamanın
+modeli çalışmıyorsa sınır içinde başlatır, bitince kapatır. Yalıtım yoksa modele veri
+gönderilmez.
 11434 yasaktır. Model yorumu `WEAKLY_INFERRED` kalır; kullanıcı öneriyi inceledikten sonra
 `--action yes` ile doğrulayabilir. Model yoksa kullanıcı metni kaybolmadan `UNKNOWN` tutulur.
 `--action interpret --structured …`, bağdaştırıcıların doğrulanmamış öneri kaydetmesi içindir.

@@ -1,7 +1,9 @@
 """M2 kurulum adımları: Ollama çalışma ortamı, model, doğrulama.
 
 Tüm işlemler uygulamaya ait izole süreç (127.0.0.1:<port>, OLLAMA_NO_CLOUD=1) üzerinden
-yapılır. Sistemdeki Ollama servisine, ayarlarına ve modellerine dokunulmaz.
+yapılır. Sistemdeki Ollama servisine, ayarlarına ve modellerine dokunulmaz. Modeli
+çalıştıran adımlar (içe aktarma, doğrulama) ağ yalıtımında yürür (`isolated`); yalnız
+açık izinli indirme ağ kullanır ve o süreç modeli çalıştıramaz.
 """
 from __future__ import annotations
 
@@ -13,7 +15,7 @@ from pathlib import Path
 
 from lai_runtime.client import ModelNotFoundError, OllamaClient
 from lai_runtime.config import RuntimeConfig, load_runtime_config
-from lai_runtime.models import (ModelSourceError, find_source_model, import_model,
+from lai_runtime.models import (ModelSourceError, find_source_model,
                                 source_from_gguf, split_name)
 from lai_runtime.process import RuntimeManager
 
@@ -22,10 +24,12 @@ from .steps import Context, Step
 VERIFY_PROMPT = "Yalnızca TAMAM kelimesini yaz."
 
 
-def runtime_manager(ctx_or_paths, platform: str | None = None) -> RuntimeManager:
+def runtime_manager(ctx_or_paths, platform: str | None = None, *,
+                    download_only: bool = False) -> RuntimeManager:
     paths = getattr(ctx_or_paths, "paths", ctx_or_paths)
     plat = platform or getattr(getattr(ctx_or_paths, "info", None), "os", None)
-    return RuntimeManager(load_runtime_config(paths), paths, platform=plat)
+    return RuntimeManager(load_runtime_config(paths), paths, platform=plat,
+                          download_only=download_only)
 
 
 @contextmanager
@@ -119,14 +123,14 @@ class ModelAvailable(Step):
         return self.verify(ctx)[0]
 
     def apply(self, ctx: Context) -> None:
-        mgr = runtime_manager(ctx)
-        model = mgr.cfg.model
+        from .isolated import run_isolated
+
+        model = load_runtime_config(ctx.paths).model
         if ctx.mode == "offline":
-            source = offline_model_source(ctx.offline_dir, model)
-            with running(mgr) as client:
-                import_model(client, source, model, _progress)
+            offline_model_source(ctx.offline_dir, model)  # eksikse yalıtım kurmadan bildir
+            run_isolated("import", ctx.paths, model=model, offline_dir=ctx.offline_dir)
         elif ctx.mode == "online":
-            with running(mgr) as client:
+            with running(runtime_manager(ctx, download_only=True)) as client:
                 client.pull(model, _progress)
         else:
             raise RuntimeError(f"{model} yok ve indirme izni verilmedi (--online / --offline)")
@@ -156,7 +160,10 @@ class RuntimeVerify(Step):
             and self.verify(ctx)[0]
 
     def apply(self, ctx: Context) -> None:
-        ok, msg = verify_inference(runtime_manager(ctx))
+        from .isolated import run_isolated
+
+        r = run_isolated("verify", ctx.paths)
+        ok, msg = r["ok"], r["message"]
         if not ok:
             raise RuntimeError(msg)
 

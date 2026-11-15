@@ -1,4 +1,9 @@
-"""Ollama HTTP istemcisi — yalnız loopback, proxy yok, yönlendirme yok."""
+"""Ollama HTTP istemcisi — yalnız loopback, proxy yok, yönlendirme yok.
+
+Modele giden her istek (`/api/version` dışında) bağlantı açılmadan önce doğrulanmış ağ
+yalıtımı ister (`guard`). Tek istisna `download_only=True`: kurulum aracının açık izinli
+indirmesi; bu istemci yalnız `/api/pull` gönderebilir, modeli asla çalıştıramaz.
+"""
 from __future__ import annotations
 
 import ipaddress
@@ -19,6 +24,10 @@ class OllamaError(RuntimeError):
 
 class RuntimeUnavailableError(OllamaError):
     pass
+
+
+class ModelIsolationError(OllamaError):
+    """Yalıtım doğrulanmadı ya da indirme istemcisiyle model kullanılmak istendi."""
 
 
 class ModelNotFoundError(OllamaError):
@@ -66,14 +75,32 @@ def _check_loopback(base_url: str) -> str:
     return f"http://{u.netloc}"
 
 
+_ALWAYS = {("GET", "/api/version")}
+_DOWNLOAD = {("POST", "/api/pull")}
+
+
 class OllamaClient:
-    def __init__(self, base_url: str, timeout: float = 600):
+    def __init__(self, base_url: str, timeout: float = 600, *, download_only: bool = False):
         self.base_url = _check_loopback(base_url)
         self.timeout = timeout
+        self.download_only = download_only
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
 
     # -- alt düzey --------------------------------------------------------------------------
+    def _guard(self, method: str, path: str) -> None:
+        if (method, path) in _ALWAYS:
+            return
+        if self.download_only:
+            if (method, path) not in _DOWNLOAD:
+                raise ModelIsolationError(
+                    f"indirme istemcisi yalnız model indirebilir; {path} reddedildi")
+            return
+        from .guard import require_model_isolation
+
+        require_model_isolation()
+
     def _open(self, method: str, path: str, data=None, headers=None, timeout=None):
+        self._guard(method, path.split("?", 1)[0])
         req = urllib.request.Request(self.base_url + path, data=data, method=method,
                                      headers=headers or {})
         try:
@@ -163,6 +190,8 @@ class OllamaClient:
         try:
             with self._open("HEAD", f"/api/blobs/{digest}", timeout=30):
                 return True
+        except ModelIsolationError:
+            raise
         except OllamaError:
             return False
 

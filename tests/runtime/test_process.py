@@ -156,6 +156,8 @@ def test_child_dies_when_app_is_killed(paths, fake_binary, tmp_path):
     helper.write_text(textwrap.dedent(f"""
         import sys, time
         sys.path.insert(0, {str(SRC)!r})
+        import lai_runtime.guard as guard
+        guard._verified = lambda: True  # sahte ikili; gerçek kapı test_model_guard'da
         from lai_runtime.config import RuntimeConfig
         from lai_runtime.process import RuntimeManager
         from lai_setup.paths import resolve_paths
