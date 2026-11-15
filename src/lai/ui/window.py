@@ -741,6 +741,17 @@ class MainWindow(QMainWindow):
             self.status.setText(
                 "Rapor salt okunur açıldı: " + data["preview_report"]["path"]
             )
+        if "commentary" in data:
+            body = data["commentary"]
+            for dialog in self.dialogs:
+                if (
+                    isinstance(dialog, ResultDialog)
+                    and dialog.assessment_id == body["assessment_id"]
+                ):
+                    dialog.show_commentary(body)
+            self.status.setText(
+                "Yerel model açıklaması kaydedildi; sonraki dışa aktarmalara eklenecek."
+            )
         if "exported" in data:
             self.last_export = data["exported"]
             self.status.setText("Rapor kaydedildi: " + self.last_export["path"])
@@ -1164,9 +1175,18 @@ class MainWindow(QMainWindow):
     def show_result(self, assessment):
         dialog = ResultDialog(assessment, self)
         dialog.export_requested.connect(self.select_export)
+        dialog.commentary_requested.connect(self.request_commentary)
         self.dialogs.append(dialog)
         dialog.show()
         self.last_result = assessment
+
+    def request_commentary(self, id):
+        if self.task is not None:
+            self.status.setText(
+                "Önce etkin işlemin tamamlanmasını bekleyin veya iptal edin."
+            )
+            return
+        self.start("report_commentary", dict(self.model_args(), id=id))
 
     def export_history(self):
         index = self.history.currentRow()

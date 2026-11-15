@@ -47,7 +47,7 @@ def test_v5_upgrade_preserves_m7_assessment_and_enables_jobs(tmp_path, monkeypat
         s.close()
     upgraded = Store.open(tmp_path / "upgrade.db", backup_dir=tmp_path / "backups")
     try:
-        assert upgraded.conn.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert upgraded.conn.execute("PRAGMA user_version").fetchone()[0] == 7
         assert upgraded.assessments.get(before.id) == before
         assert list((tmp_path / "backups").glob("*.db"))
         job = create_job(

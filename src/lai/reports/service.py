@@ -1,6 +1,7 @@
 """M10: donmuş değerlendirmeler, işlem tutarlı toplu görüntü ve atomik çıktı.
 
-Motor, Qt ve model çağrısı yoktur. Decimal JSON'da ondalık metin olarak taşınır.
+Motor, Qt ve model çağrısı yoktur; yerel model açıklaması yalnız önceden kaydedilmişse
+kayıttan okunur. Decimal JSON'da ondalık metin olarak taşınır.
 """
 
 from __future__ import annotations
@@ -15,6 +16,9 @@ from decimal import Decimal
 from pathlib import Path
 
 from lai.assessment.service import job_status
+
+from .commentary import latest as latest_commentary
+from .commentary import profile_code
 
 
 class ExportCancelled(RuntimeError):
@@ -57,18 +61,7 @@ def assessment_report(store, assessment_id):
     result = assessment["results"]
     dims = result.get("dimensions", [])
     # Kod üretmeyiz; yalnız eksiksiz kayıtlı kodu gösteririz.
-    code = result.get("full_profile")
-    if not (
-        len(dims) == 4
-        and all(
-            d.get("selected_pole")
-            and d.get("final") is not None
-            and d.get("status") != "NOT_EVALUABLE"
-            for d in dims
-        )
-        and code == "".join(d["selected_pole"] for d in dims)
-    ):
-        code = None
+    code = profile_code(result)
     explanations = []
     for d in dims:
         if d.get("selected_pole") is None:
@@ -92,6 +85,7 @@ def assessment_report(store, assessment_id):
             else "Doğrulanmış (VERIFIED) kayıt."
         ),
         "commentary_source": "deterministic_template_v1",
+        "ai_commentary": latest_commentary(store, assessment_id),
     }
 
 
@@ -189,7 +183,7 @@ def single_tables(report):
         for section in ("contributions", "transformations", "rules"):
             for n, entry in enumerate(d.get(section, []), 1):
                 trace.append((d["dimension"], section, n, entry))
-    return [
+    tables = [
         ("Özet", summary),
         ("Boyutlar", dimensions),
         ("Hesap dökümü", trace),
@@ -198,6 +192,26 @@ def single_tables(report):
             [("Türkçe açıklama",), *[(v,) for v in report["explanations"]]],
         ),
     ]
+    ai = report.get("ai_commentary")
+    if ai:
+        tables.append(
+            (
+                "Model açıklaması",
+                [
+                    ("Bölüm", "Açıklama"),
+                    (
+                        "Not",
+                        "Yerel model tarafından kayıtlı sonuçtan yazıldı; puanı ve "
+                        "seçilen kutbu değiştirmez.",
+                    ),
+                    ("Model", ai["model"]),
+                    ("Tarih", ai["created_at"]),
+                    ("Özet", ai["summary"]),
+                    *[(d["dimension"], d["text"]) for d in ai["dimensions"]],
+                ],
+            )
+        )
+    return tables
 
 
 def batch_tables(payload):

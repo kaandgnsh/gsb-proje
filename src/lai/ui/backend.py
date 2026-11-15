@@ -190,6 +190,11 @@ class Backend:
                     progress=progress,
                 )
             }
+        if op == "report_commentary":
+            from lai.reports.commentary import generate
+
+            body = generate(s, a["id"], self._llm(a))
+            return {"commentary": dict(body, assessment_id=a["id"])}
         if op == "refresh":
             return {}
         if op == "create_inventory":

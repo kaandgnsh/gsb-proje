@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -160,9 +161,11 @@ def tree_value(parent, key, value):
 
 class ResultDialog(QDialog):
     export_requested = Signal(int, str)
+    commentary_requested = Signal(int)
 
     def __init__(self, assessment, parent=None):
         super().__init__(parent)
+        self.assessment_id = assessment["id"]
         self.setWindowTitle("Değerlendirme sonucu ve hesap dökümü")
         self.resize(1050, 740)
         self.setObjectName("result_dialog")
@@ -220,9 +223,35 @@ class ResultDialog(QDialog):
             )
         )
         layout.addWidget(export)
+        self.commentary = QPlainTextEdit()
+        self.commentary.setObjectName("model_commentary")
+        self.commentary.setReadOnly(True)
+        self.commentary.setAccessibleName("Yerel model açıklaması")
+        self.commentary.setPlaceholderText(
+            "İsteğe bağlı: yerel model kayıtlı sonucu Türkçe açıklar. Puan ve seçilen "
+            "harf değişmez; açıklama kaydedilir ve sonraki dışa aktarmalara eklenir."
+        )
+        self.commentary.setMaximumHeight(150)
+        layout.addWidget(self.commentary)
+        explain = QPushButton("Yerel modelle &açıklama üret")
+        explain.setObjectName("generate_commentary")
+        explain.clicked.connect(
+            lambda: self.commentary_requested.emit(self.assessment_id)
+        )
+        layout.addWidget(explain)
         close = QPushButton("&Kapat")
         close.clicked.connect(self.close)
         layout.addWidget(close)
+
+
+    def show_commentary(self, body):
+        self.commentary.setPlainText(
+            "\n\n".join(
+                [body["summary"]]
+                + [f"{d['dimension']}: {d['text']}" for d in body["dimensions"]]
+                + [f"Model: {body['model']} · {body['created_at']}"]
+            )
+        )
 
 
 class ReportPreview(QDialog):

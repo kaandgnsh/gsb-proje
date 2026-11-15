@@ -149,3 +149,38 @@ def test_export_write_failure_keeps_target_visible_error(
     assert target.read_text() == "OLD"
     assert "yazma izni yok" in w.status.text()
     assert not list(tmp_path.glob(".lai-export-*"))
+
+
+def test_result_dialog_generates_model_commentary(tmp_path, windows, monkeypatch):
+    from lai.ai.llm import LLMReply
+
+    reply = {
+        "summary": "Sonuç ESFJ olarak kayıtlıdır.",
+        "dimensions": [
+            {"dimension": d, "text": f"{d} boyutunda {p} seçildi."}
+            for d, p in [("E-I", "E"), ("S-N", "S"), ("T-F", "F"), ("J-P", "J")]
+        ],
+    }
+
+    class Fake:
+        model, think = "yerel-test", True
+
+        def complete(self, *, system, prompt, schema):
+            return LLMReply(json.dumps(reply), "", 1, 1)
+
+    db, aid, _ = saved(tmp_path)
+    w = windows(db)
+    w.backend.llm_factory = Fake
+    w.start("result", {"assessment_id": aid})
+    idle(w)
+    dialog = w.dialogs[-1]
+    dialog.findChild(QPushButton, "generate_commentary").click()
+    idle(w)
+    assert "Sonuç ESFJ olarak kayıtlıdır." in dialog.commentary.toPlainText()
+    assert "kaydedildi" in w.status.text()
+    path = tmp_path / "açıklamalı.json"
+    monkeypatch.setattr(w, "export_path", lambda *args: str(path))
+    dialog.export_format.setCurrentText("JSON")
+    dialog.findChild(QPushButton, "export_result").click()
+    idle(w)
+    assert json.loads(path.read_text())["ai_commentary"]["summary"] == reply["summary"]
