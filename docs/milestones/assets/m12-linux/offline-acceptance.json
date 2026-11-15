@@ -1,0 +1,11 @@
+{
+  "question_counts": [
+    4,
+    12,
+    28
+  ],
+  "platform": "linux",
+  "passed": true,
+  "data_preserved": true,
+  "network_namespace": true
+}

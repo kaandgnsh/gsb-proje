@@ -1,0 +1,7 @@
+{
+  "normal_appimage_gui_started": true,
+  "database_initialized": true,
+  "kernel_filtered_descendants": 1,
+  "synthetic_only": true,
+  "wayland": "m12-virtual"
+}

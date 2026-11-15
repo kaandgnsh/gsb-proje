@@ -1,0 +1,9 @@
+{
+  "self_contained_install": true,
+  "second_install": true,
+  "damaged_release_repaired": true,
+  "doctor": true,
+  "uninstall": true,
+  "data_and_reports_preserved": true,
+  "network_disabled_for_installer": true
+}
