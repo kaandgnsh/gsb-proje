@@ -1111,15 +1111,23 @@ class MainWindow(QMainWindow):
             return
         g = self.gap_data[index]
         p = g["payload"]
+        proposal = p.get("proposal") or p.get("candidate_rules") or "Henüz yok"
+        if isinstance(proposal, list) and len(proposal) > 5:
+            proposal = (
+                f"{len(proposal)} kural; ilk 5: "
+                + json.dumps(proposal[:5], ensure_ascii=False)
+            )
         self.gap_detail.setPlainText(
-            f"{p['question']}\n\nNeden: {p['why']}\nBoyutlar: {p['dimensions']}\nSorular: {p['items']}\nKanıtlar: {p['evidence']}\nÖnerilen bilgi: {p.get('proposal') or p.get('candidate_rules') or 'Henüz yok'}\nDurum: {text(g['state'])}"
+            f"{p['question']}\n\nNeden: {p['why']}\nBoyutlar: {p['dimensions']}\nSorular: {p['items']}\nKanıtlar: {p['evidence']}\nÖnerilen bilgi: {proposal}\nDurum: {text(g['state'])}"
         )
         self.rule_editor.dimension.setText(
             p["dimensions"][0] if p["dimensions"][0] != "*" else ""
         )
         aliases = {
             "zero_policy": "zero_score",
-            "confirmation": (p.get("proposal") or {}).get("rule_type"),
+            "confirmation": p["proposal"].get("rule_type")
+            if isinstance(p.get("proposal"), dict)
+            else None,
         }
         idx = self.rule_editor.kind.findData(aliases.get(g["category"], g["category"]))
         if idx >= 0:

@@ -19,6 +19,8 @@ from .discovery import (
     _inventory_items,
     _known_poles,
 )
+from .answer_key import covered as answer_key_covered
+from .answer_key import readings as answer_key_readings
 from .fit import run_fit
 
 STATES = (
@@ -163,7 +165,14 @@ def analyze(store, inventory_id, *, refresh_fit=True):
     desired = {}
 
     def need(
-        category, dim, affected, evidence, suffix="", proposal=None, state="UNKNOWN"
+        category,
+        dim,
+        affected,
+        evidence,
+        suffix="",
+        proposal=None,
+        state="UNKNOWN",
+        question=None,
     ):
         label, severity, text = LABELS[category]
         key = f"{category}:{dim}:{suffix}"
@@ -177,7 +186,7 @@ def analyze(store, inventory_id, *, refresh_fit=True):
             "dimensions": [dim],
             "items": sorted(affected),
             "evidence": evidence,
-            "question": f"{dim}: {text}",
+            "question": f"{dim}: {question or text}",
             "choices": [
                 "Evet",
                 "Hayır",
@@ -309,8 +318,60 @@ def analyze(store, inventory_id, *, refresh_fit=True):
         (inventory_id,),
     ).fetchall()
     fact = store.knowledge.latest(inventory_id, "fact:answer_key:*")
-    if keys and not (fact and fact.confidence == "CONFIRMED"):
-        need("answer_key", "*", {r[0] for r in keys}, [dict(r) for r in keys])
+    if (
+        keys
+        and not (fact and fact.confidence == "CONFIRMED")
+        and not answer_key_covered(store, inventory_id)
+    ):
+        found = answer_key_readings(store, inventory_id)
+        offered = [r for r in found if r.outcome != "inconsistent"]
+        tested = any(r.outcome != "not_testable" for r in found)
+        if tested:
+            offered = [r for r in offered if r.outcome == "consistent"]
+        sample = [dict(r) for r in keys[:20]]
+        for r in offered:
+            need(
+                "answer_key",
+                "*",
+                {x["body"]["item"] for x in r.rules},
+                {
+                    "reading": r.code,
+                    "fit": r.outcome,
+                    "fit_detail": r.detail,
+                    "alternatives": len(offered),
+                    "sample": sample,
+                },
+                r.code,
+                proposal=r.rules,
+                state="STRONGLY_INFERRED"
+                if r.outcome == "consistent"
+                else "WEAKLY_INFERRED",
+                question=(
+                    f"{r.label} Bu okuma örnek sonuçlarla tutarlı; "
+                    f"{len(r.rules)} madde kuralı onaylansın mı?"
+                    if r.outcome == "consistent"
+                    else f"{r.label} Örnek sonuç olmadığı için sınanamadı"
+                    + (
+                        f" ({len(offered)} olası okumadan biri)"
+                        if len(offered) > 1
+                        else ""
+                    )
+                    + f"; {len(r.rules)} madde kuralı onaylansın mı?"
+                ),
+            )
+        if not offered:
+            need(
+                "answer_key",
+                "*",
+                {r[0] for r in keys},
+                {
+                    "tested_readings": [
+                        {"reading": r.code, "fit": r.outcome, "fit_detail": r.detail}
+                        for r in found
+                    ],
+                    "sample": sample,
+                },
+            )
     for r in store.conn.execute(
         "SELECT c.* FROM discovery_candidates c JOIN discovery_runs r ON r.id=c.run_id "
         "WHERE r.inventory_id=? AND c.status='conflicts_confirmed'",
@@ -489,7 +550,7 @@ def answer(store, gap_id, action, text="", *, structured=None):
     if action in ("teach", "correct", "interpret", "yes"):
         if proposal is not None:
             candidates = proposal if isinstance(proposal, list) else [proposal]
-            if not candidates or len(candidates) > 1000:
+            if not candidates or len(candidates) > 20000:
                 raise ValueError("Öneri sayısı geçersiz")
             parsed = [_validate_proposal(store, inv, p) for p in candidates]
         elif action in ("yes", "interpret"):

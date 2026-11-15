@@ -480,6 +480,40 @@ def test_standalone_key_ui_preview_and_learning_source(tmp_path, windows):
     assert w.learning_data["answer_key_sources"][0]["file_name"] == "key.csv"
 
 
+def test_answer_key_reading_is_confirmed_from_learning_page(tmp_path, windows):
+    db = tmp_path / "key-rules.db"
+    ready(db)
+    p = tmp_path / "key.csv"
+    p.write_text("Soru No,Cevap Anahtarı\n1,E\n2,I\n", encoding="utf-8")
+    w = windows(db)
+    w.doc_role.setCurrentIndex(w.doc_role.findData("answer_key"))
+    w.doc_path.setText(str(p))
+    click(w, "preview_document")
+    click(w, "save_document")
+    w.nav.setCurrentRow(1)
+    click(w, "learning_refresh")
+    readings = {
+        g["payload"]["evidence"].get("reading"): n
+        for n, g in enumerate(w.gap_data)
+        if g["category"] == "answer_key"
+    }
+    assert set(readings) == {"pole_first", "pole_second"}
+    w.gap_table.selectRow(readings["pole_first"])
+    assert "2 kural" not in w.gap_detail.toPlainText()  # kısa öneri tam gösterilir
+    assert "item_pole_map" in w.gap_detail.toPlainText()
+    click(w, "confirm")
+    s = Store.open(db)
+    try:
+        maps = {
+            e.item_number: e.content["body"]["options"]
+            for e in s.knowledge.current(1, kind="rule")
+            if e.rule_type == "item_pole_map" and e.confidence == "CONFIRMED"
+        }
+    finally:
+        s.close()
+    assert maps == {1: {"A": "E", "B": "I"}, 2: {"A": "I", "B": "E"}}
+
+
 def test_history_paging_opens_records_older_than_first_500(tmp_path, windows):
     from lai.assessment.service import submit_single
 
