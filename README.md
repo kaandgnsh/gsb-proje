@@ -3,7 +3,11 @@
 Kişilik envanterlerini **tamamen yerel** olarak değerlendiren masaüstü uygulaması ve onu kuran,
 denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilgisayardan çıkmaz.
 
-> Geliştirme sürüyor. Durum: M1–M9 tamamlandı — bkz. `docs/milestones/`.
+> Durum: M1–M12 tamamlandı — bkz. `docs/milestones/`. Linux x86_64 AppImage (0.12.1)
+> ağsız, temiz bir Arch container'ında deneme moduyla doğrulandı. Model pakette yoktur;
+> hedef makinede ilk kurulumda açık izinle indirilir (bkz. [Yapay zekâ modeli](#yapay-zekâ-modeli)).
+> Bekleyenler: Windows paketinin Windows'ta derlenip doğrulanması, hedef `qwen3.5:4b`
+> modelinin kalite ölçümü (indirildiği makinede).
 
 ## Hızlı başlangıç (Linux)
 
@@ -36,7 +40,12 @@ uv venv -p 3.14 .venv && uv pip install --python .venv -r requirements/app.txt p
 
 ## Yapay zekâ modeli
 
+Model pakete gömülmez. Hedef makinede ilk kurulumda indirilir; indirme yalnız kurulum
+aracında, `--online` açık izniyle yapılır. Uygulamanın kendisi yalıtım içinde çalışır ve
+internete çıkamaz.
+
 ```bash
+./lai-0.12.1-linux-x86_64.AppImage --setup install --online --yes   # ilk kurulum: Ollama süreci + model
 python -m lai_setup model pull --online                 # qwen3.5:4b indir (açık izin)
 python -m lai_setup model import --from model.gguf      # çevrimdışı .gguf
 python -m lai_setup model import --from /baska/ollama --name model:tag   # başka depodan, salt okunur
@@ -326,3 +335,70 @@ PYTHONPATH=src .venv/bin/python -m lai_setup doctor --network --pid PID --json
 yalıtım kanıtı değildir. CLI'ı korunan sınırda çalıştırma örnekleri, 747 teknik test,
 kontrollü DNS/proxy testleri, gerçek yerel çıkarım ve Windows sınırları:
 [M11 raporu](docs/milestones/M11.md), [güvenlik kapsamı](docs/security.md).
+
+
+### Linux paketi (M12)
+
+`dist/lai-<sürüm>-linux-x86_64.AppImage` uygulamayı, Python'u ve bağımlılıkları içerir;
+Ollama ve model içermez. Sistemde `glibc`, bubblewrap, libseccomp ve Wayland gerekir.
+
+```bash
+./lai-0.12.1-linux-x86_64.AppImage                                   # arayüz (M11 yalıtımıyla)
+./lai-0.12.1-linux-x86_64.AppImage --setup install --yes             # kullanıcı köküne kur
+./lai-0.12.1-linux-x86_64.AppImage --setup doctor --json             # salt okunur denetim
+./lai-0.12.1-linux-x86_64.AppImage --setup repair --yes              # onar
+./lai-0.12.1-linux-x86_64.AppImage --setup uninstall --yes           # kaldır (veriler korunur)
+PYTHONPATH=src .venv/bin/python -m lai_setup bundle --output dist/yeni.AppDir \
+  --appimagetool dist/build-tools/appimagetool-root/AppRun \
+  --appimage-runtime dist/build-tools/runtime-x86_64                  # paketi yeniden üret
+```
+
+Windows için `packaging/windows/` altında PyInstaller ve Inno Setup tarifleri vardır;
+bunlar bir Windows makinesinde `packaging\windows\build.ps1` ile derlenir (Linux'tan
+çapraz derleme yapılmaz). Windows ağ yalıtımı uygulanmadığı için Windows'ta değerlendirme
+kapalıdır.
+Ayrıntılar: [M12 raporu](docs/milestones/M12.md).
+
+### Kurulumsuz deneme modu
+
+Sorunları kurulum yapmadan görmek için paket ayrı bir deneme kökünde
+(`~/.cache/local-assessment-ai/deneme`) çalıştırılabilir. Başlatıcı, kısayol veya sistem
+kaydı oluşturulmaz; model indirilmez. Mevcut bir Ollama deposundaki model
+(`/var/lib/ollama` ya da `~/.ollama/models`) salt okunur kopyalanır, sistem Ollama
+servisine istek gönderilmez. Eski `manifests/` düzeni ve manifestleri yalnız `blobs/`
+içinde tutan Ollama 0.40+ düzeni tanınır.
+
+```bash
+./lai-0.12.1-linux-x86_64.AppImage --deneme                         # tanı + arayüz
+./lai-0.12.1-linux-x86_64.AppImage --deneme --yalniz-tani           # yalnız tanı
+./lai-0.12.1-linux-x86_64.AppImage --deneme --model qwen3.5-9b-sansursuz:latest
+./lai-0.12.1-linux-x86_64.AppImage --deneme --kaynak /baska/ollama-deposu
+./lai-0.12.1-linux-x86_64.AppImage --deneme --modelsiz              # modelsiz arayüz
+./lai-0.12.1-linux-x86_64.AppImage --deneme --temizle               # deneme kökünü sil
+```
+
+Tanı yalıtım içinde ağ ad alanını, internet erişiminin kapalı olduğunu, veritabanını,
+uygulamanın Ollama sürecini ve kısa bir model yanıtını sınar; her satırı TAMAM/HATA
+olarak yazar. Tanı ve arayüz çıktısı `~/.cache/local-assessment-ai/deneme/logs/` altındaki
+günlüğe, Ollama çıktısı `runtime/ollama.log` dosyasına gider. Ayarlar ekranındaki model
+adı deneme kökünün `config/config.toml` dosyasından gelir. `--temizle` yalnız deneme
+işaret dosyası (`.lai-deneme`) bulunan dizini siler.
+
+Not: yalıtım, uygulamanın bilgisayarda yeni bağlantı noktası (Unix soketi) açmasını
+engeller. NVIDIA'nın CUDA kütüphanesi başlarken böyle bir soket açmak istediği için
+yalıtılmış uygulamada model GPU yerine CPU'da çalışır (daha yavaş, ama güvenli).
+
+#### Ağsız container'da deneme (kurulumsuz, sistemden ayrık)
+
+Paketi temiz bir dağıtımda ve ağ bağlantısı olmadan sınamak için:
+
+```bash
+packaging/linux/container-deneme.sh dist/lai-0.12.1-linux-x86_64.AppImage --yalniz-tani
+packaging/linux/container-deneme.sh dist/lai-0.12.1-linux-x86_64.AppImage   # tanı + arayüz (Wayland)
+```
+
+Betik ilk seferde `podman` ile minimal bir Arch imajı hazırlar (yalnız bu adım ağ kullanır),
+ardından AppImage'ı `--network=none` ile, 8 GB bellek sınırıyla çalıştırır. Sistem Ollama
+ikilisi ve model deposu salt okunur bağlanır; deneme kökü
+`~/.cache/local-assessment-ai/container/` altındadır. Paket glibc 2.44 ile üretildiği için
+daha eski glibc'li dağıtımlarda (ör. Ubuntu 24.04) çalışmaz.
