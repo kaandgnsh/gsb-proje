@@ -33,6 +33,10 @@ def main():
             ):
                 setup_args += ["--bundle", str(root)]
             return setup(setup_args)
+        if args[:1] == ["--deneme"] and not os.environ.get("LAI_SANDBOX_ACTIVE"):
+            from .trial import main as trial
+
+            return trial(root, args[1:])
         from lai_runtime.sandbox import GUIDANCE, launch, require_isolation
 
         if os.environ.get("LAI_SANDBOX_ACTIVE"):
@@ -66,6 +70,10 @@ def main():
                     results["glibc_nss_resolve"] = False
                 print(json.dumps(results))
                 return 0
+            if args[:1] == ["--tani"]:
+                from .trial import diagnose
+
+                return diagnose()
             if args[:1] == ["--ingest"]:
                 from lai.ingest.__main__ import main as ingest
 

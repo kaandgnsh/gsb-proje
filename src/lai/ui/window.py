@@ -45,6 +45,21 @@ from .widgets import (
 )
 
 
+def _configured_model():
+    """config.toml'daki model; okunamazsa varsayılan."""
+    import os
+    import sys
+
+    from lai_runtime.config import RuntimeConfig, load_runtime_config
+    from lai_setup.paths import resolve_paths
+
+    try:
+        platform = "windows" if sys.platform == "win32" else "linux"
+        return load_runtime_config(resolve_paths(platform, os.environ, Path.home())).model
+    except (OSError, ValueError, TypeError):
+        return RuntimeConfig().model
+
+
 class MainWindow(QMainWindow):
     operation_finished = Signal(str)
 
@@ -601,7 +616,7 @@ class MainWindow(QMainWindow):
         self.port.setRange(1024, 65535)
         self.port.setValue(self.preferences.get("port", 11435))
         self.port.setObjectName("model_port")
-        self.model = QLineEdit(self.preferences.get("model", "qwen3.5:4b"))
+        self.model = QLineEdit(self.preferences.get("model", _configured_model()))
         self.model.setObjectName("model_name")
         form.addRow("Uygulamanın yerel model portu (11434 kullanılamaz)", self.port)
         form.addRow("Yerel model adı", self.model)
