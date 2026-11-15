@@ -2,7 +2,7 @@
 # Local Assessment AI — AppImage'ı ağsız, temiz bir Arch container'ında deneme modunda çalıştırır.
 # Kullanım: packaging/linux/container-deneme.sh <AppImage> [--deneme seçenekleri]
 #   Örnek: packaging/linux/container-deneme.sh dist/lai-0.12.1-linux-x86_64.AppImage --yalniz-tani
-# Ortam: LAI_CONTAINER_KOK (vars. ~/.cache/local-assessment-ai/container),
+# Ortam: LAI_CONTAINER_KOK (vars. ~/.cache/gsb-proje/container),
 #        LAI_OLLAMA_KAYNAK (vars. /var/lib/ollama), LAI_CONTAINER_BELLEK (vars. 8g).
 # İmaj yalnız ilk seferde ağ ile oluşturulur; deneme --network=none ile çalışır. Ollama ikilisi ve
 # model deposu salt okunur bağlanır; sistem Ollama servisine erişim yoktur.
@@ -11,7 +11,7 @@ set -euo pipefail
 appimage=${1:?AppImage yolu gerekli}
 shift
 appimage=$(realpath "$appimage")
-kok=${LAI_CONTAINER_KOK:-$HOME/.cache/local-assessment-ai/container}
+kok=${LAI_CONTAINER_KOK:-$HOME/.cache/gsb-proje/container}
 kaynak=${LAI_OLLAMA_KAYNAK:-/var/lib/ollama}
 imaj=lai-temiz-arch
 

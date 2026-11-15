@@ -341,5 +341,5 @@ def test_desktop_preserves_runtime_root_with_private_home(tmp_path, monkeypatch)
     monkeypatch.setattr(sandbox, "launch", launch)
     assert main(["--db", str(tmp_path / "dbdir/data.db")]) == 0
     assert called[0]["env"]["LAI_HOME"] == str(
-        tmp_path / "host-home/.local/share/local-assessment-ai"
+        tmp_path / "host-home/.local/share/gsb-proje"
     )

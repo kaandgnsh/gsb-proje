@@ -1,9 +1,9 @@
 #define AppVersion "0.12.0"
 [Setup]
-AppId=LocalAssessmentAI
+AppId=gsb-proje
 AppName=Yerel Envanter
 AppVersion={#AppVersion}
-DefaultDirName={localappdata}\LocalAssessmentAI\app
+DefaultDirName={localappdata}\gsb-proje\app
 PrivilegesRequired=lowest
 OutputBaseFilename=YerelEnvanter-{#AppVersion}-windows-unverified
 ArchitecturesAllowed=x64compatible

@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 MARKER = ".lai-deneme"
-DEFAULT_ROOT = Path.home() / ".cache" / "local-assessment-ai" / "deneme"
+DEFAULT_ROOT = Path.home() / ".cache" / "gsb-proje" / "deneme"
 SOURCES = (Path("/var/lib/ollama"), Path.home() / ".ollama" / "models")
 PROMPT = "Yalnızca TAMAM yaz."
 

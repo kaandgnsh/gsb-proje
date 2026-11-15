@@ -5,8 +5,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 
-APP_ID = "local-assessment-ai"
-WIN_APP_ID = "LocalAssessmentAI"
+APP_ID = "gsb-proje"
+WIN_APP_ID = "gsb-proje"
 
 
 @dataclass(frozen=True)

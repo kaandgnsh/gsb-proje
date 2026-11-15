@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
     if args.cmd == 'bundle':
         from .bundle import main as bundle_main
         return bundle_main(['--output',args.output] + (['--appimagetool',args.appimagetool] if args.appimagetool else []) + (['--appimage-runtime',args.appimage_runtime] if args.appimage_runtime else []) + ['--component',args.component] + (['--source',args.source] if args.source else []))
-    package_home = Path(getattr(args,'lai_home',None) or (env or os.environ).get('LAI_HOME') or Path.home()/'.local/share/local-assessment-ai')
+    package_home = Path(getattr(args,'lai_home',None) or (env or os.environ).get('LAI_HOME') or Path.home()/'.local/share/gsb-proje')
     if getattr(args,'bundle',None) or (args.cmd in ('doctor','uninstall','repair') and (package_home/'.lai-package.json').is_file() and not getattr(args,'network',False)):
         from .bundle import manage
         try:

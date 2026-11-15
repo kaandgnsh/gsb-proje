@@ -73,7 +73,7 @@ def main(argv=None):
     translator.load("qtbase_tr", QLibraryInfo.path(QLibraryInfo.TranslationsPath))
     app.installTranslator(translator)
     app.setApplicationName("Yerel Envanter")
-    app.setOrganizationName("LocalAssessmentAI")
+    app.setOrganizationName("gsb-proje")
     w = MainWindow(a.db)
     w.show()
     try:

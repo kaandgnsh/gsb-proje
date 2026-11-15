@@ -237,7 +237,7 @@ bilgisi isteğe bağlıdır (dosyada varsa doldurulur).
 
 Windows: `.\install.ps1`, `.\doctor.ps1`, `.\repair.ps1`, `.\uninstall.ps1` (yönetici yetkisi gerekmez).
 
-Kurulum kullanıcı düzeyindedir (`~/.local/share/local-assessment-ai`). Sistemde kurulu bir
+Kurulum kullanıcı düzeyindedir (`~/.local/share/gsb-proje`). Sistemde kurulu bir
 Ollama varsa ona **dokunulmaz**; uygulama kendi Ollama sürecini `127.0.0.1:11435` üzerinde çalıştırır.
 
 ## Belgeler
@@ -281,7 +281,7 @@ python -m lai_setup db backup                 # data/backups altına doğrulanm�
 python -m lai_setup db verify <yedek.db>      # yedeği denetle
 python -m lai_setup db restore <yedek.db>     # geri yükle (önce mevcut DB yedeklenir)
 ```
-Veritabanı `~/.local/share/local-assessment-ai/data/lai.db`; kaldırmada korunur.
+Veritabanı `~/.local/share/gsb-proje/data/lai.db`; kaldırmada korunur.
 
 ## Belge içe aktarma
 
@@ -582,7 +582,7 @@ Ayrıntılar: [M12 raporu](docs/milestones/M12.md).
 ### Kurulumsuz deneme modu
 
 Sorunları kurulum yapmadan görmek için paket ayrı bir deneme kökünde
-(`~/.cache/local-assessment-ai/deneme`) çalıştırılabilir. Başlatıcı, kısayol veya sistem
+(`~/.cache/gsb-proje/deneme`) çalıştırılabilir. Başlatıcı, kısayol veya sistem
 kaydı oluşturulmaz; model indirilmez. Mevcut bir Ollama deposundaki model
 (`/var/lib/ollama` ya da `~/.ollama/models`) salt okunur kopyalanır, sistem Ollama
 servisine istek gönderilmez. Eski `manifests/` düzeni ve manifestleri yalnız `blobs/`
@@ -599,7 +599,7 @@ içinde tutan Ollama 0.40+ düzeni tanınır.
 
 Tanı yalıtım içinde ağ ad alanını, internet erişiminin kapalı olduğunu, veritabanını,
 uygulamanın Ollama sürecini ve kısa bir model yanıtını sınar; her satırı TAMAM/HATA
-olarak yazar. Tanı ve arayüz çıktısı `~/.cache/local-assessment-ai/deneme/logs/` altındaki
+olarak yazar. Tanı ve arayüz çıktısı `~/.cache/gsb-proje/deneme/logs/` altındaki
 günlüğe, Ollama çıktısı `runtime/ollama.log` dosyasına gider. Ayarlar ekranındaki model
 adı deneme kökünün `config/config.toml` dosyasından gelir. `--temizle` yalnız deneme
 işaret dosyası (`.lai-deneme`) bulunan dizini siler.
@@ -620,5 +620,5 @@ packaging/linux/container-deneme.sh dist/lai-0.12.1-linux-x86_64.AppImage   # ta
 Betik ilk seferde `podman` ile minimal bir Arch imajı hazırlar (yalnız bu adım ağ kullanır),
 ardından AppImage'ı `--network=none` ile, 8 GB bellek sınırıyla çalıştırır. Sistem Ollama
 ikilisi ve model deposu salt okunur bağlanır; deneme kökü
-`~/.cache/local-assessment-ai/container/` altındadır. Paket glibc 2.44 ile üretildiği için
+`~/.cache/gsb-proje/container/` altındadır. Paket glibc 2.44 ile üretildiği için
 daha eski glibc'li dağıtımlarda (ör. Ubuntu 24.04) çalışmaz.
