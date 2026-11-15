@@ -9,18 +9,215 @@ denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilg
 > Bekleyenler: Windows paketinin Windows'ta derlenip doğrulanması, hedef `qwen3.5:4b`
 > modelinin kalite ölçümü (indirildiği makinede).
 
-## Ekran görüntüleri
+## Nasıl kullanılır? (adım adım, resimli)
 
-Görüntüler yalnız sentetik veriyle, model çağrılmadan `tests/ui/native_smoke.py` ve
-`tests/ui/native_reporting.py` ile alınmıştır.
+Kısaca: programa **soruları** verirsiniz, **puanlamanın nasıl yapılacağını** öğretirsiniz,
+sonra **cevapları** girersiniz; program her kişi için **sonucu** hesaplar ve **rapor** (PDF,
+Excel, CSV, JSON) çıkarır. Her şey bu bilgisayarda kalır, internete hiçbir şey gitmez.
 
-| Belgeler | Öğrenme Merkezi |
-|---|---|
-| ![Belgeler: içe aktarma önizlemesi](docs/screenshots/belgeler.png) | ![Öğrenme Merkezi: eksik bilgi soruları ve açık kural formu](docs/screenshots/ogrenme-merkezi.png) |
-| **Toplu İşler** | **Geçmiş** |
-| ![Toplu İşler: sütun önizlemesi ve iş ilerlemesi](docs/screenshots/toplu-isler.png) | ![Geçmiş: kayıtlı sonuçlar ve dışa aktarma](docs/screenshots/gecmis.png) |
+```
+ 1. Soru belgesi  →  2. Puanlama kuralları  →  3. Cevaplar  →  4. Sonuç  →  5. Rapor
+    (Belgeler)        (Öğrenme Merkezi)        (Tekil / Toplu)   (hesap dökümü)  (PDF/Excel…)
+```
 
-![Sonuç: boyut puanları ve açılabilir hesap dökümü](docs/screenshots/sonuc-dokumu.png)
+| Adım | Ekran | Siz ne verirsiniz? | Program ne verir? |
+|---|---|---|---|
+| 1 | Belgeler | Soru dosyası (PDF, Word, Excel, CSV, JSON) | Kontrol edilmiş, kaydedilmiş soru listesi |
+| 2 | Öğrenme Merkezi | Puanlamanın kuralları (form ya da açıklama) | Puanlama profili (kural paketi) |
+| 3 | Tekil Değerlendirme | Bir kişinin cevapları | O kişinin sonucu |
+| 3 | Toplu İşler | Çok kişinin cevaplarını içeren CSV/Excel | Herkesin sonucu + toplu rapor |
+| 4 | Sonuç penceresi | — | Sonuç kodu, puanlar, neden böyle çıktığının dökümü |
+| 5 | Sonuç / Geçmiş / Toplu | Rapor biçimi ve kayıt yeri | PDF, Excel, CSV, JSON dosyası |
+
+> Aşağıdaki resimler **uydurma (sentetik) verilerle** çekildi: 8 soru, her soruda 2 seçenek
+> (A/B), dört boyut (E-I, S-N, T-F, J-P). Gerçek envanterinizde sayılar farklı olur.
+
+### Ekranın genel düzeni
+
+- **Sol menü:** 7 ekran — Belgeler, Öğrenme Merkezi, Tekil Değerlendirme, Toplu İşler,
+  Geçmiş, Katılımcılar, Ayarlar. Klavyeyle `Ctrl+1` … `Ctrl+7` arası.
+- **Üstte "Envanter":** Hangi envanter üzerinde çalıştığınızı seçersiniz. **Yenile** (`Ctrl+R`)
+  ekrandaki bilgileri tazeler.
+- **Alt çubuk:** Solda son işlemin durumu, ortada ilerleme çubuğu, sağda **Dosyayı aç**
+  (son çıkan raporu açar) ve **İşlemi iptal et** (`Esc`).
+
+### 1. Belgeler — soruları programa tanıtın
+
+![Belgeler ekranı: envanter oluşturma, belge seçme, önizleme](docs/screenshots/01-belgeler.png)
+
+1. En üstteki kutuya envanterin adını yazın (örnek: *Örnek Kişilik Envanteri*) ve
+   **Envanter oluştur**'a basın. Bu, sorularınızın konacağı boş bir klasör gibidir.
+2. Altındaki listeden belgenin ne olduğunu seçin:
+   - **Envanter soruları (varsa anahtarla)** — soruların kendisi,
+   - **Ayrı cevap anahtarı** — hangi seçeneğin neye karşılık geldiği ayrı bir dosyadaysa,
+   - **Puanlama yönergesi / başvuru belgesi** — puanlamayı anlatan kılavuz.
+3. **Dosya seç…** ile dosyayı gösterin (PDF, DOCX, XLSX, CSV veya JSON).
+4. **Önizle**'ye basın. Henüz hiçbir şey kaydedilmez; program dosyayı okur ve gösterir:
+   - Satırın altında özet: *"8 soru, 0 anahtar, 0 bildirim"*.
+   - Büyük tablo: okunan her soru, metni ve dosyanın neresinden okunduğu.
+   - Ortadaki boş tablo: sorunlar (Hata / Uyarı / Bilgi), sayfa/satır numarasıyla. Boşsa sorun yok.
+   - En alttaki kutu: dosyadan okunan ham metnin bir parçası (doğru okunmuş mu diye bakmak için).
+5. Her şey doğruysa **Kontrol edilen belgeyi kaydet**'e basın.
+
+**Çıktı:** Sorular veritabanına kaydedilir. Dosyada hata varsa kayıt yapılmaz; aynı dosya
+iki kez yüklenmez.
+
+### 2. Öğrenme Merkezi — puanlamayı programa öğretin
+
+Program puanlamayı kendi uydurmaz. Hangi sorunun hangi boyutu ölçtüğünü, A'nın hangi harfe
+puan verdiğini, boş bırakılan sorunun ne olacağını… sizden öğrenir. Bilmediği her şeyi
+**soru listesi** hâlinde sorar.
+
+![Öğrenme Merkezi: eksik bilgiler listesi ve kural öğretme formu](docs/screenshots/02-ogrenme-merkezi.png)
+
+1. **Eksikleri ve kuralları incele**'ye basın. Sol tabloda programın sorduğu eksik bilgiler
+   çıkar; önemine göre **Kritik** / **Yüksek** diye sıralanır.
+2. Bir satıra tıklayın. Altındaki kutuda programın ne sorduğu ve **neden** sorduğu yazar
+   (resimde: *"E-I: Cevaplanmamış maddeler nasıl işlenir?"*).
+3. Cevabı vermenin iki yolu var:
+   - **Sağdaki form (önerilen):** Kural türünü, boyutu ve yöntemi seçin, sonra
+     **Açık kuralı öğret**'e basın. Resimdeki örnek: *Eksik cevap politikası → tüm boyutlar
+     (`*`) → Atla*, yani "boş bırakılan sorular hesaba katılmasın".
+   - **Soldaki düğmeler:** Altındaki kutuya açıklamanızı yazıp **Açıklamayı kaydet**;
+     ya da **Doğrula** (gösterilen öneri doğru), **Bilmiyorum**, **Daha sonra**,
+     **Bu bilgiyi kullanma**, **Yeniden sor**.
+4. Sağ alttaki iki liste, programın şimdiye kadar öğrendiği kuralları ve her birinin
+   kaynağını (siz mi söylediniz, hangi belgede yazıyor) gösterir.
+5. **Yerel kural analizi** (isteğe bağlı, yapay zekâ gerekir): Yüklediğiniz yönergeden
+   kural önerir. Öneriler siz **onaylamadan** asla kesin kural sayılmaz.
+6. **Yeni profil sürümü yayımla:** Öğrettiğiniz kuralları bir paket hâline getirir.
+   Bu pakete **puanlama profili** denir; sonraki adımlarda bunu seçeceksiniz.
+
+**Çıktı:** Puanlama profili. Kuralları sonradan düzeltirseniz yeni bir profil sürümü oluşur;
+eski sonuçlar ve eski sürümler değişmez.
+
+### 3a. Tekil Değerlendirme — bir kişinin cevaplarını girin
+
+![Tekil Değerlendirme: katılımcı bilgisi ve soru soru cevaplar](docs/screenshots/03-tekil-degerlendirme.png)
+
+1. **Sınav sürümü** (hangi soru listesi) ve **Puanlama profili** (hangi kurallar) seçin.
+   *Doğrulanmış* yazan profil, onaylı kurallardan oluşur.
+2. Kişinin **katılımcı kodunu** (örnek: `K-001`) ve isterseniz **takma adını** (örnek: *Deniz*)
+   yazın. Gerçek ad gerekmez.
+3. **Seçilen sürümün sorularını yükle**'ye basın; tüm sorular listelenir.
+4. Her sorunun yanındaki **Cevap** kutusundan kişinin işaretlediği seçeneği seçin.
+   Boş bıraktıysa **Yanıt yok** seçin.
+5. **Değerlendir ve kaydet**'e basın.
+
+**Çıktı:** Sonuç kaydedilir ve sonuç penceresi açılır (aşağıda).
+
+### 4. Sonuç penceresi — sonuç ve "neden böyle çıktı?"
+
+![Sonuç penceresi: boyut puanları ve hesap dökümü](docs/screenshots/04-sonuc.png)
+
+- **En üst satır:** Hangi profil ve sınav sürümüyle hesaplandığı, durum ve sonuç kodu
+  (resimde **ENTJ**).
+- **Üst tablo**, her boyut için:
+  - **Ham puan:** Cevaplardan gelen puan. Örnek: `E: 2 · I: 0` → iki soru E'ye puan vermiş.
+  - **Nihai puan:** Kurallar (ters soru, ağırlık vb.) uygulandıktan sonraki puan.
+  - **Seçilen harf:** Puanı yüksek olan taraf → **E**.
+- **Hesap dökümü:** Sonucun adım adım nasıl bulunduğu. Sağ okla açılır:
+  hangi soru ne kadar puan verdi, hangi kural uygulandı, kural nereden geldi, hesaplanamayan
+  bir şey varsa nedeni.
+- **Durum ne demek?**
+  - **Doğrulanmış:** Gereken bütün kurallar onaylı; sonuç kesin.
+  - **Geçici:** Bazı kurallar hâlâ eksik. Resimdeki örnekte Öğrenme Merkezi'nde
+    "Normalizasyon formülü" gibi cevaplanmamış sorular kaldığı için sonuç *Geçici*.
+    Eksikler tamamlanıp yeni profil yayımlanınca, **Geçmiş** ekranından yeniden hesaplanabilir.
+- **Rapor almak:** Biçimi seçin (PDF, XLSX, CSV, JSON) → **Raporu dışa aktar** → program
+  dosyayı nereye kaydedeceğinizi sorar.
+- **Yerel modelle açıklama üret** (isteğe bağlı): Yapay zekâ sonucu Türkçe yorumlar.
+  Puanları ve harfleri **değiştirmez**; yorum rapora eklenir.
+
+### 5. Rapor (PDF)
+
+Rapor kaydedilince alt çubuktaki **Dosyayı aç**'a basın; rapor program içinde, değiştirilemez
+(salt okunur) olarak açılır.
+
+![PDF rapor önizlemesi](docs/screenshots/05-rapor-pdf.png)
+
+Raporda: katılımcı kodu ve takma ad, envanter ve sürümleri, durum, sonuç kodu, her boyutun
+puanları ve hesap dökümü bulunur.
+
+### 3b. Toplu İşler — çok kişiyi tek dosyadan değerlendirin
+
+Önce cevapları bir **CSV** ya da **Excel (XLSX)** dosyasına koyun. Kural basit:
+**her satır bir kişi, her sütun bir soru.**
+
+```csv
+participant_id,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8
+K-001,B,B,A,B,A,A,A,A
+K-002,B,B,A,B,A,A,A,A
+```
+
+- **Kişi sütunu** şu başlıklardan biri olabilir: `katılımcı`, `katilimci_kodu`, `kod`,
+  `kimlik`, `id`, `participant_id` …
+- **Soru sütunları:** `Q1`, `Soru1`, `S1` ya da sadece `1` — sayı, soru numarasıdır.
+- İsteğe bağlı sütunlar: `takma_ad`, `ad_soyad`, `eposta`, `telefon`.
+- Hücreye seçeneğin kodu yazılır (A, B …). Boş hücre = cevap yok.
+
+![Toplu İşler: dosya önizlemesi ve sütun eşlemesi](docs/screenshots/06-toplu-onizleme.png)
+
+1. **Sınav sürümü** ve **Puanlama profili** seçin.
+2. İlk **Dosya seç…** ile cevap dosyasını gösterin. Excel ise altındaki kutuya sayfa adını
+   yazabilirsiniz (boş bırakırsanız dolu bütün sayfalar okunur).
+3. İkinci **Dosya seç…** isteğe bağlıdır: sütun başlıklarınız tanınmıyorsa, hangi sütunun
+   neye karşılık geldiğini söyleyen bir eşleme dosyası (JSON) verirsiniz.
+4. **Sütunları ve cevapları önizle**'ye basın:
+   - Özet satırı: *"12 katılımcı; 0 hatalı satır"*.
+   - Sol tablo: program hangi sütunu ne sandı (`participant_id` → Katılımcı kodu, `Q1` → 1. soru…).
+     Yanlışsa burada görürsünüz.
+   - Sağ tablo: hatalı satırlar (hangi satır, hangi kişi, hangi soru, ne sorun var).
+5. Doğruysa **Önizlenen işi kaydet**'e basın. İş, ortadaki iş listesine eklenir.
+6. İşi seçip **Başlat / devam et**'e basın.
+
+![Toplu İşler: biten iş ve kişi kişi sonuçlar](docs/screenshots/07-toplu-sonuc.png)
+
+- **İş listesindeki sayaçlar:**
+  **Başarılı** (kesin sonuç), **Kısmi** (sonuç var ama *Geçici*: kural eksik),
+  **Hatalı** (hesaplanamadı), **Bekleyen** (henüz sırası gelmedi).
+- **Duraklat** / **İşi iptal et:** Güvenle durur; kaldığı yerden **Başlat / devam et** ile
+  sürer. Pencereyi kapatırsanız iş kendiliğinden duraklar, sonuçlar kaybolmaz.
+- **En alttaki tablo:** Her kişinin durumu, dosyadaki satırı ve sonucu (INFP, ESFJ …).
+  Bir satıra çift tıklayınca o kişinin sonuç penceresi açılır.
+- **Toplu rapor:** Biçim seçin — **CSV**, **XLSX** ya da **Tekil PDF'ler (ZIP)** (her kişi
+  için ayrı PDF) — ve **Raporu dışa aktar**'a basın.
+
+### 6. Geçmiş — kaydedilmiş bütün sonuçlar
+
+![Geçmiş: kayıtlı sonuçlar listesi](docs/screenshots/08-gecmis.png)
+
+- Her satır bir değerlendirmedir: kayıt no, katılımcı, durum, kullanılan sürümler, tarih.
+- **Seçilen sonucu aç:** Sonuç penceresini, hesaplandığı günkü kurallarla açar.
+- **Dışa aktar:** Seçtiğiniz biçimde (PDF, XLSX, CSV, JSON) rapor üretir.
+- **Tekil ekrandaki profille yeniden değerlendir:** Aynı cevapları, Tekil Değerlendirme
+  ekranında seçili (ör. yeni yayımlanmış) profille yeniden hesaplar. Eski sonuç silinmez;
+  yenisi ayrı kayıt olur.
+- 500'den fazla kayıt varsa **Önceki sayfa / Sonraki sayfa** ile gezilir.
+
+Excel raporu da program içinde açılır; dört sekmesi vardır: **Özet**, **Boyutlar**,
+**Hesap dökümü**, **Açıklamalar**.
+
+![Excel rapor önizlemesi](docs/screenshots/09-rapor-excel.png)
+
+### 7. Katılımcılar
+
+![Katılımcılar listesi](docs/screenshots/10-katilimcilar.png)
+
+Değerlendirilen herkes burada listelenir. Kod veya takma ad yeterlidir; ad ve iletişim
+bilgisi isteğe bağlıdır (dosyada varsa doldurulur).
+
+### 8. Ayarlar — yapay zekâ (isteğe bağlı)
+
+![Ayarlar: yerel model portu ve model adı](docs/screenshots/11-ayarlar.png)
+
+- **Yapay zekâ olmadan da çalışır:** Belge yükleme, kuralları elle öğretme, puanlama ve
+  raporlar modelsiz yapılır. Model yalnız *kural önerme* ve *Türkçe açıklama* içindir.
+- **Port** (varsayılan `11435`) ve **model adı** (varsayılan `qwen3.5:4b`) buradan seçilir.
+  `11434` kabul edilmez; böylece bilgisayarda kurulu başka bir Ollama'ya dokunulmaz.
+- **Uygulamanın Ollama sürecini başlat / durdur** ve **Yerel model durumunu kontrol et**
+  düğmeleri modeli yönetir. Model internete çıkamayacak şekilde yalıtılmış çalışır.
+- En altta verilerin saklandığı veritabanı dosyasının yeri yazar.
 
 ## Hızlı başlangıç (Linux)
 
