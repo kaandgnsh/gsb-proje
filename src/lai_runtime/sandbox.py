@@ -215,7 +215,7 @@ def clean_env(source, *, gui=False):
     return env
 
 
-def launch(command, *, writable=(), gui=False, env=None, **kwargs):
+def launch(command, *, writable=(), readable=(), gui=False, env=None, **kwargs):
     """Doğrulanmış sınır içinde komut çalıştır; başarısızlıkta asla doğrudan çalıştırma.
 
     cwd ve okuma erişimi korunur. Yazma yalnız açıkça verilen klasörlere ve özel
@@ -305,6 +305,11 @@ def launch(command, *, writable=(), gui=False, env=None, **kwargs):
         ]
         for directory in writes:
             argv += ["--bind", directory, directory]
+        for directory in readable:
+            directory = Path(directory).resolve()
+            if not directory.is_dir() or directory == Path("/"):
+                raise IsolationError("Geçersiz salt okunur paket dizini")
+            argv += ["--ro-bind", str(directory), str(directory)]
         argv += ["--ro-bind", str(control), "/run/lai-control"]
         if wayland:
             argv += ["--ro-bind", str(wayland), "/run/lai/wayland"]
@@ -313,6 +318,7 @@ def launch(command, *, writable=(), gui=False, env=None, **kwargs):
             "--",
             sys.executable,
             "-I",
+            "-B",
             str(Path(__file__).resolve()),
             "--bootstrap",
             "/run/lai-control/launch.json",

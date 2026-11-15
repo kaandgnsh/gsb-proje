@@ -19,7 +19,7 @@ from .report import Report
 from .runner import CommandRunner, SystemRunner
 from .state import InstallState
 from .steps import Context, StepResult, StepStatus, run_steps
-from .uninstall import PURGE_WORD, is_managed_root, plan_uninstall, execute
+from .uninstall import PURGE_WORD, execute, is_managed_root, plan_uninstall
 
 EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_CANCEL = 0, 1, 2, 3
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +38,13 @@ def _parser() -> argparse.ArgumentParser:
     common.add_argument("--lai-home", help="tüm uygulama dizinleri için kök (gelişmiş)")
     common.add_argument("--requirements", help="Python bağımlılık listesi (gelişmiş)")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    bundle = sub.add_parser("bundle", help="yerel AppDir oluştur")
+    bundle.add_argument("--output", required=True)
+    bundle.add_argument("--appimagetool")
+    bundle.add_argument("--appimage-runtime")
+    bundle.add_argument("--component",choices=["application","runtime","model"],default="application")
+    bundle.add_argument("--source")
 
     d = sub.add_parser("detect", parents=[common], help="ortamı salt okunur tespit et")
     d.add_argument("--json", action="store_true")
@@ -94,6 +101,8 @@ def _parser() -> argparse.ArgumentParser:
     u.add_argument("--purge-data", action="store_true",
                    help="değerlendirme verilerini ve raporları da sil (geri alınamaz)")
     u.add_argument("--yes", action="store_true")
+    for command in ("install", "repair", "doctor", "uninstall"):
+        sub.choices[command].add_argument("--bundle", help="doğrulanmış AppDir paketi")
     return p
 
 
@@ -102,6 +111,28 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
          input_fn: Callable[[str], str] = input, fs_root: Path = Path("/"),
          http_get=None, platform: str | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.cmd == 'bundle':
+        from .bundle import main as bundle_main
+        return bundle_main(['--output',args.output] + (['--appimagetool',args.appimagetool] if args.appimagetool else []) + (['--appimage-runtime',args.appimage_runtime] if args.appimage_runtime else []) + ['--component',args.component] + (['--source',args.source] if args.source else []))
+    package_home = Path(getattr(args,'lai_home',None) or (env or os.environ).get('LAI_HOME') or Path.home()/'.local/share/local-assessment-ai')
+    if getattr(args,'bundle',None) or (args.cmd in ('doctor','uninstall','repair') and (package_home/'.lai-package.json').is_file() and not getattr(args,'network',False)):
+        from .bundle import manage
+        try:
+            if args.cmd=='uninstall' and not args.yes:
+                print('Paket kaldırma için --yes gerekli; veriler korunur.',file=sys.stderr)
+                return EXIT_USAGE
+            if getattr(args,'dry_run',False):
+                from .bundle import verify
+                verify(args.bundle)
+                print(json.dumps({'dry_run':True,'target':str(package_home)},ensure_ascii=False))
+                return EXIT_OK
+            if getattr(args,'purge_data',False):
+                raise ValueError('Paket kaldırma verileri korur; purge işlemi bu yolda desteklenmiyor')
+            print(json.dumps(manage(args.cmd,package_home,getattr(args,'bundle',None)),ensure_ascii=False))
+            return EXIT_OK
+        except (ValueError,OSError) as error:
+            print('Paket hatası: '+str(error),file=sys.stderr)
+            return EXIT_FAIL
     if args.cmd == "doctor" and args.network:
         from lai_runtime.netaudit import diagnostic
         try:
@@ -229,7 +260,7 @@ def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None,
         return EXIT_OK if rep.ok else EXIT_FAIL
     state.save()
     _warn_ports(rep)
-    j, t = rep.write(paths.logs) if paths.logs.is_dir() else (None, None)
+    _j, t = rep.write(paths.logs) if paths.logs.is_dir() else (None, None)
     out(rep.to_text())
     if t:
         out(f"Rapor: {t}")

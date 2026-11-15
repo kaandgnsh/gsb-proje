@@ -5,6 +5,7 @@ Bu dosya unshare -Urnmfp --mount-proc altında çalıştırılır. Sistem ayarı
 
 import argparse
 import json
+import os
 import socket
 import socketserver
 import subprocess
@@ -24,6 +25,7 @@ def run(*args):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("work", type=Path)
+    p.add_argument("--app-run")
     a = p.parse_args()
     work = a.work
     run("mount", "--make-rprivate", "/")
@@ -190,6 +192,22 @@ def main():
     assert runtime.returncode == 0, runtime.stderr + runtime.stdout
     runtime = json.loads(runtime.stdout)
     assert len(hits) == count
+    packaged = None
+    if a.app_run:
+        env = dict(
+            os.environ, LAI_HOME=str(work / "packaged-home"), LAI_WORKSPACE=str(work), APPIMAGE_EXTRACT_AND_RUN="1", TMPDIR=str(work)
+        )
+        check = subprocess.run(
+            [a.app_run, "--probe", str(cfg)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert check.returncode == 0, check.stderr
+        packaged = json.loads(check.stdout)
+        assert not any(packaged.values()) and len(hits) == count
     # M2 açığına pozitif kontrol: yalnız netns Unix relay'i kapatmaz.
     partial = subprocess.run(
         ["unshare", "-Urn", *command],
@@ -206,6 +224,7 @@ def main():
         "baseline": baseline,
         "protected": protected,
         "protected_child": child,
+        "protected_packaged": packaged,
         "protected_ollama": runtime,
         "namespace_only": partial,
         "baseline_hits": count,
