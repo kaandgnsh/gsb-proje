@@ -1,7 +1,7 @@
 """Çevrimdışı model içe aktarma.
 
-Kaynak: başka bir Ollama model dizini (manifests/ ya da manifests-v2/ düzeni) veya tek bir
-.gguf dosyası. Kaynağa asla yazılmaz; ağırlıklar özet (sha256) doğrulanarak izole çalışma
+Kaynak: başka bir Ollama model dizini (manifests/, manifests-v2/ ya da manifestleri yalnız
+blobs/ içinde tutan yeni düzen) veya tek bir .gguf dosyası. Kaynağa asla yazılmaz; ağırlıklar özet (sha256) doğrulanarak izole çalışma
 ortamına Ollama API'si (blob yükleme + create) üzerinden aktarılır. Böylece hedef dizinin
 iç düzeni Ollama sürümüne bırakılır.
 """
@@ -23,6 +23,7 @@ MT_PARAMS = "application/vnd.ollama.image.params"
 MT_ADAPTER = "application/vnd.ollama.image.adapter"
 _HOSTS = ("registry.ollama.ai", "ollama.com")
 _LAYOUTS = ("manifests", "manifests-v2")
+_MANIFEST_MAX = 64 * 1024
 
 
 class ModelSourceError(RuntimeError):
@@ -68,6 +69,47 @@ def _sha256(path: Path, on_progress: Callable[[dict], None] | None = None) -> st
     return "sha256:" + h.hexdigest()
 
 
+def _short_name(name: str) -> str:
+    _, ns, repo, tag = split_name(name)
+    return f"{repo}:{tag}" if ns == "library" else f"{ns}/{repo}:{tag}"
+
+
+def blob_manifests(models_dir: Path) -> dict[str, Path]:
+    """Manifestleri yalnız blobs/ içinde tutan Ollama düzeni: ad -> manifest blob'u.
+
+    Ad, model katmanının `from` alanından gelir; okunamayan ya da büyük blob'lar atlanır.
+    """
+    found: dict[str, Path] = {}
+    blobs = Path(models_dir) / "blobs"
+    if not blobs.is_dir():
+        return found
+    for path in sorted(blobs.iterdir()):
+        try:
+            if not path.is_file() or path.stat().st_size > _MANIFEST_MAX:
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict) or data.get("schemaVersion") != 2:
+            continue
+        for layer in data.get("layers", []):
+            if isinstance(layer, dict) and layer.get("mediaType") == MT_MODEL and layer.get("from"):
+                found.setdefault(_short_name(str(layer["from"])), path)
+    return found
+
+
+def list_source_models(models_dir: Path) -> list[str]:
+    """Kaynak dizindeki model adları (her üç düzen)."""
+    models_dir = Path(models_dir)
+    names = []
+    for layout in _LAYOUTS:
+        for tag in sorted((models_dir / layout).glob("*/*/*/*")):
+            if tag.is_file():
+                names.append(_short_name(f"{tag.parent.parent.name}/{tag.parent.name}:{tag.name}"))
+    names += [n for n in blob_manifests(models_dir) if n not in names]
+    return names
+
+
 def find_source_model(models_dir: Path, name: str) -> SourceModel:
     models_dir = Path(models_dir)
     host, ns, repo, tag = split_name(name)
@@ -81,6 +123,8 @@ def find_source_model(models_dir: Path, name: str) -> SourceModel:
                 break
         if manifest_path:
             break
+    if manifest_path is None:
+        manifest_path = blob_manifests(models_dir).get(_short_name(name))
     if manifest_path is None:
         raise ModelSourceError(f"kaynak dizinde model bulunamadı: {name} ({models_dir})")
     try:

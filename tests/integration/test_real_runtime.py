@@ -27,7 +27,8 @@ from conftest import free_port
 from lai_runtime.chunking import chunk_text
 from lai_runtime.client import ModelNotFoundError
 from lai_runtime.config import RuntimeConfig
-from lai_runtime.models import ModelSourceError, find_source_model, import_model
+from lai_runtime.models import (ModelSourceError, find_source_model, import_model,
+                                list_source_models)
 from lai_runtime.netaudit import NetworkMonitor
 from lai_runtime.ports import PortConflictError, port_in_use
 from lai_runtime.process import RuntimeManager
@@ -45,10 +46,7 @@ OPTS = {"temperature": 0, "seed": 42, "num_ctx": 4096}
 
 
 def _first_model(store: Path) -> str | None:
-    for layout in ("manifests-v2", "manifests"):
-        for tag in sorted((store / layout).glob("*/*/*/*")):
-            return f"{tag.parent.name}:{tag.name}"
-    return None
+    return next(iter(list_source_models(store)), None)
 
 
 def _system_snapshot() -> dict:

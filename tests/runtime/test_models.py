@@ -8,7 +8,7 @@ import pytest
 
 from lai_runtime.client import OllamaClient
 from lai_runtime.models import (ModelSourceError, find_source_model, import_model,
-                                source_from_gguf)
+                                list_source_models, source_from_gguf)
 
 
 def _blob(store: Path, data: bytes) -> str:
@@ -27,7 +27,12 @@ def make_store(root: Path, layout: str, name="demo", tag="latest", gguf=b"GGUF-s
         {"mediaType": "application/vnd.ollama.image.model", "digest": model, "size": len(gguf)},
         {"mediaType": "application/vnd.ollama.image.params", "digest": params},
         {"mediaType": "application/vnd.ollama.image.template", "digest": tmpl}]}).encode()
-    if layout == "v1":
+    if layout == "blobs":
+        manifest = json.loads(manifest)
+        manifest["layers"][0]["from"] = f"{name}:{tag}"
+        _blob(root, json.dumps(manifest).encode())
+        (root / "manifests").mkdir()
+    elif layout == "v1":
         p = root / "manifests/registry.ollama.ai/library" / name / tag
         p.parent.mkdir(parents=True)
         p.write_bytes(manifest)
@@ -57,7 +62,7 @@ def _writable(root: Path):
             p.chmod(p.stat().st_mode | stat.S_IWUSR)
 
 
-@pytest.mark.parametrize("layout", ["v1", "v2"])
+@pytest.mark.parametrize("layout", ["v1", "v2", "blobs"])
 def test_find_source_model(tmp_path, layout):
     digest = make_store(tmp_path / "src", layout)
     s = find_source_model(tmp_path / "src", "demo")
@@ -65,6 +70,22 @@ def test_find_source_model(tmp_path, layout):
     assert s.parameters == {"temperature": 0.2, "stop": ["<|im_end|>"]}
     assert s.template == "{{ .Prompt }}"
     assert find_source_model(tmp_path / "src", "demo:latest").gguf_digest == digest
+
+
+@pytest.mark.parametrize("layout", ["v1", "v2", "blobs"])
+def test_list_source_models(tmp_path, layout):
+    make_store(tmp_path / "src", layout, name="qwen-yerel", tag="9b")
+    assert list_source_models(tmp_path / "src") == ["qwen-yerel:9b"]
+
+
+def test_blob_store_ignores_non_manifest_blobs(tmp_path):
+    root = tmp_path / "src"
+    _blob(root, b"GGUF-sahte")
+    _blob(root, b"{bozuk json")
+    _blob(root, json.dumps({"schemaVersion": 2, "layers": []}).encode())
+    assert list_source_models(root) == []
+    with pytest.raises(ModelSourceError):
+        find_source_model(root, "demo")
 
 
 def test_missing_source_model(tmp_path):
