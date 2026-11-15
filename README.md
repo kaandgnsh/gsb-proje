@@ -9,6 +9,19 @@ denetleyen, onaran kurulum motoru. Hiçbir sınav ya da katılımcı verisi bilg
 > Bekleyenler: Windows paketinin Windows'ta derlenip doğrulanması, hedef `qwen3.5:4b`
 > modelinin kalite ölçümü (indirildiği makinede).
 
+## Ekran görüntüleri
+
+Görüntüler yalnız sentetik veriyle, model çağrılmadan `tests/ui/native_smoke.py` ve
+`tests/ui/native_reporting.py` ile alınmıştır.
+
+| Belgeler | Öğrenme Merkezi |
+|---|---|
+| ![Belgeler: içe aktarma önizlemesi](docs/screenshots/belgeler.png) | ![Öğrenme Merkezi: eksik bilgi soruları ve açık kural formu](docs/screenshots/ogrenme-merkezi.png) |
+| **Toplu İşler** | **Geçmiş** |
+| ![Toplu İşler: sütun önizlemesi ve iş ilerlemesi](docs/screenshots/toplu-isler.png) | ![Geçmiş: kayıtlı sonuçlar ve dışa aktarma](docs/screenshots/gecmis.png) |
+
+![Sonuç: boyut puanları ve açılabilir hesap dökümü](docs/screenshots/sonuc-dokumu.png)
+
 ## Hızlı başlangıç (Linux)
 
 ```bash
